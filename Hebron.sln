@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31911.196
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hebron.Core", "src\Hebron.Core\Hebron.Core.csproj", "{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x64.ActiveCfg = Debug|x64
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x64.Build.0 = Debug|x64
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x86.ActiveCfg = Debug|x86
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x86.Build.0 = Debug|x86
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x64.ActiveCfg = Release|x64
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x64.Build.0 = Release|x64
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x86.ActiveCfg = Release|x86
+		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D03A3157-D3F0-4F76-B13B-C75D5DC7BEA8}
+	EndGlobalSection
+EndGlobal

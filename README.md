@@ -1,2 +1,2 @@
 # Hebron
-Framework for conversion of C libraries to other languages
+Framework for converting C libraries to other languages
