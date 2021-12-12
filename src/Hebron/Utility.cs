@@ -9,13 +9,6 @@ namespace Hebron
 {
 	internal static class Utility
 	{
-		public enum RecordType
-		{
-			None,
-			Struct,
-			Class
-		}
-
 		public static unsafe TranslationUnit Compile(string inputPath, string[] defines)
 		{
 			if (string.IsNullOrEmpty(inputPath))
