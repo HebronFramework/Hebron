@@ -1,13 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
 
 namespace Hebron.Roslyn
 {
 	public class RoslynConversionResult
 	{
-		public readonly Dictionary<string, string> Enums = new Dictionary<string, string>();
-		public readonly Dictionary<string, string> Constants = new Dictionary<string, string>();
-		public readonly Dictionary<string, string> GlobalVariables = new Dictionary<string, string>();
-		public readonly Dictionary<string, string> Structs = new Dictionary<string, string>();
-		public readonly Dictionary<string, string> Methods = new Dictionary<string, string>();
+		public readonly Dictionary<string, EnumDeclarationSyntax> NamedEnums = new Dictionary<string, EnumDeclarationSyntax>();
+		public readonly Dictionary<string, FieldDeclarationSyntax> UnnamedEnumValues = new Dictionary<string, FieldDeclarationSyntax>();
+		public readonly Dictionary<string, MethodDeclarationSyntax> Functions = new Dictionary<string, MethodDeclarationSyntax>();
 	}
 }

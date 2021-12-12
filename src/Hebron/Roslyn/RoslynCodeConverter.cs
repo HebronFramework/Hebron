@@ -1,26 +1,33 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+﻿using ClangSharp;
 using System;
-using System.Collections.Generic;
 
 namespace Hebron.Roslyn
 {
-	public static partial class RoslynCodeConverter
+	public partial class RoslynCodeConverter
 	{
+		public TranslationUnit TranslationUnit { get; }
+		public RoslynConversionParameters Parameters { get; }
+		private RoslynConversionResult Result { get; }
+
+		private RoslynCodeConverter(RoslynConversionParameters parameters)
+		{
+			Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
+			TranslationUnit = Utility.Compile(parameters.InputPath, parameters.Defines);
+			Result = new RoslynConversionResult();
+		}
+
+		public RoslynConversionResult Convert()
+		{
+			ConvertEnums();
+			ConvertFunctions();
+
+			return Result;
+		}
+
 		public static RoslynConversionResult Convert(RoslynConversionParameters parameters)
 		{
-			if (parameters == null)
-			{
-				throw new ArgumentNullException(nameof(parameters));
-			}
-
-			var translationUnit = Utility.Compile(parameters.InputPath, parameters.Defines);
-
-			Dictionary<string, EnumDeclarationSyntax> namedEnums;
-			Dictionary<string, AssignmentExpressionSyntax> unnamedEnumValues;
-
-			translationUnit.ConvertEnums(parameters.SkipEnums, out namedEnums, out unnamedEnumValues);
-
-			return null;
+			var converter = new RoslynCodeConverter(parameters);
+			return converter.Convert();
 		}
 	}
 }

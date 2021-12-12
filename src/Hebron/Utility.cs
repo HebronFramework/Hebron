@@ -3,11 +3,19 @@ using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Type = ClangSharp.Type;
 
 namespace Hebron
 {
 	internal static class Utility
 	{
+		public enum RecordType
+		{
+			None,
+			Struct,
+			Class
+		}
+
 		public static unsafe TranslationUnit Compile(string inputPath, string[] defines)
 		{
 			if (string.IsNullOrEmpty(inputPath))
@@ -111,5 +119,67 @@ namespace Hebron
 		}
 
 		public static string GetLiteralString(this Cursor cursor) => GetLiteralString(cursor.Handle);
+
+		public static bool IsArray(this Type type)
+		{
+			return type.Kind == CXTypeKind.CXType_ConstantArray ||
+				   type.Kind == CXTypeKind.CXType_DependentSizedArray ||
+				   type.Kind == CXTypeKind.CXType_VariableArray;
+		}
+
+		public static Type Depoint(this Type type)
+		{
+			if (type.IsPointerType)
+			{
+				return type.PointeeType.Depoint();
+			}
+
+			return type.PointeeType;
+		}
+
+		public static void ResolveRecord(this CXType type, out bool isStruct, out string name)
+		{
+			name = string.Empty;
+			var run = true;
+			isStruct = false;
+			while (run)
+			{
+				type = type.CanonicalType;
+
+				switch (type.kind)
+				{
+					case CXTypeKind.CXType_Record:
+						{
+							isStruct = true;
+							run = false;
+							break;
+						}
+
+					case CXTypeKind.CXType_IncompleteArray:
+					case CXTypeKind.CXType_ConstantArray:
+						type = clang.getArrayElementType(type);
+						continue;
+					case CXTypeKind.CXType_Pointer:
+						type = clang.getPointeeType(type);
+						continue;
+					default:
+						isStruct = clang.getTypeSpelling(type).ToString().Contains("struct ");
+						run = false;
+						break;
+				}
+			}
+
+			if (isStruct)
+			{
+				name = clang.getTypeSpelling(type).ToString();
+				var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
+				if (isConstQualifiedType)
+				{
+					name = name.Replace("const ", string.Empty);
+				}
+
+				name = name.Replace("struct ", string.Empty);
+			}
+		}
 	}
 }

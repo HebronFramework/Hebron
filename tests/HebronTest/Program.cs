@@ -1,5 +1,8 @@
 ﻿using Hebron.Roslyn;
-using System;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using System.IO;
+using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace Hebron
 {
@@ -25,7 +28,34 @@ namespace Hebron
 
             var result = RoslynCodeConverter.Convert(parameters);
 
-            Console.WriteLine(result);
+            var cls = ClassDeclaration("StbImage").AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword));
+
+            foreach (var pair in result.NamedEnums)
+            {
+                cls = cls.AddMembers(pair.Value);
+            }
+
+            foreach (var pair in result.UnnamedEnumValues)
+            {
+                cls = cls.AddMembers(pair.Value);
+            }
+
+            foreach (var pair in result.Functions)
+            {
+                cls = cls.AddMembers(pair.Value);
+            }
+
+            var ns = NamespaceDeclaration(ParseName("StbImageSharp")).AddMembers(cls);
+
+            string s;
+            using (var sw = new StringWriter())
+            {
+                ns.NormalizeWhitespace().WriteTo(sw);
+
+                s = sw.ToString();
+            }
+
+            File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\StbImage.Generated.cs", s);
         }
     }
 }
