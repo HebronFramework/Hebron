@@ -72,6 +72,25 @@ namespace Hebron
 			return TranslationUnit.GetOrCreate(cxTranslationUnit);
 		}
 
+		public static IEnumerable<Cursor> EnumerateCursors(this TranslationUnit translationUnit)
+		{
+			foreach (var cursor in translationUnit.TranslationUnitDecl.CursorChildren)
+			{
+				var decl = cursor as Decl;
+				if (decl == null)
+				{
+					continue;
+				}
+
+				if (decl.SourceRange.Start.IsInSystemHeader)
+				{
+					continue;
+				}
+
+				yield return cursor;
+			}
+		}
+
 		public static string GetLiteralString(this CXCursor cursor)
 		{
 			switch(cursor.Kind)
@@ -90,5 +109,7 @@ namespace Hebron
 
 			return string.Empty;
 		}
+
+		public static string GetLiteralString(this Cursor cursor) => GetLiteralString(cursor.Handle);
 	}
 }

@@ -1,9 +1,10 @@
-﻿using ClangSharp;
+﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Collections.Generic;
 
 namespace Hebron.Roslyn
 {
-	public static class RoslynCodeConverter
+	public static partial class RoslynCodeConverter
 	{
 		public static RoslynConversionResult Convert(RoslynConversionParameters parameters)
 		{
@@ -14,24 +15,10 @@ namespace Hebron.Roslyn
 
 			var translationUnit = Utility.Compile(parameters.InputPath, parameters.Defines);
 
-			foreach (var cursor in translationUnit.TranslationUnitDecl.CursorChildren)
-			{
-				var decl = cursor as Decl;
-				if (decl == null)
-				{
-					continue;
-				}
+			Dictionary<string, EnumDeclarationSyntax> namedEnums;
+			Dictionary<string, AssignmentExpressionSyntax> unnamedEnumValues;
 
-				if (decl.SourceRange.Start.IsInSystemHeader)
-				{
-					continue;
-				}
-
-				if (decl.CursorKind == ClangSharp.Interop.CXCursorKind.CXCursor_FunctionDecl)
-				{
-					var k = 5;
-				}
-			}
+			translationUnit.ConvertEnums(parameters.SkipEnums, out namedEnums, out unnamedEnumValues);
 
 			return null;
 		}

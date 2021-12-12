@@ -21,7 +21,9 @@ namespace Hebron
             };
 
 
-            var result = TextCodeConverter.Convert(parameters.InputPath, parameters.Defines);
+            // var result = TextCodeConverter.Convert(parameters.InputPath, parameters.Defines);
+
+            var result = RoslynCodeConverter.Convert(parameters);
 
             Console.WriteLine(result);
         }

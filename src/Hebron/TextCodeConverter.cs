@@ -10,19 +10,8 @@ namespace Hebron
 			var translationUnit = Utility.Compile(inputPath, defines);
 
 			var writer = new IndentedStringWriter();
-			foreach (var cursor in translationUnit.TranslationUnitDecl.CursorChildren)
+			foreach (var cursor in translationUnit.EnumerateCursors())
 			{
-				var decl = cursor as Decl;
-				if (decl == null)
-				{
-					continue;
-				}
-
-				if (decl.SourceRange.Start.IsInSystemHeader)
-				{
-					continue;
-				}
-
 				DumpCursor(writer, cursor);
 			}
 
