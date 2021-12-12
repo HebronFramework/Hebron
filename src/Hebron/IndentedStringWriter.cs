@@ -1,19 +1,13 @@
-﻿using ClangSharp.Interop;
-using System.IO;
+﻿using System.IO;
 
 namespace Hebron
 {
-	public abstract class BaseProcessor
+	public class IndentedStringWriter
 	{
-		protected readonly CXTranslationUnit _translationUnit;
-		protected int _indentLevel = 2;
+		private readonly StringWriter Writer = new StringWriter();
 
-		protected abstract TextWriter Writer { get; }
-
-		protected BaseProcessor(CXTranslationUnit translationUnit)
-		{
-			_translationUnit = translationUnit;
-		}
+		public int IndentLevel { get; set; } = 2;
+		public string Result => Writer.ToString();
 
 		public void WriteIndent()
 		{
@@ -22,7 +16,7 @@ namespace Hebron
 				return;
 			}
 
-			for (var i = 0; i < _indentLevel; ++i)
+			for (var i = 0; i < IndentLevel; ++i)
 			{
 				Writer.Write("\t");
 			}
@@ -49,7 +43,6 @@ namespace Hebron
 			WriteIndent();
 			Writer.WriteLine(string.Format(line, p));
 		}
-
 
 		public void IndentedWrite(string data)
 		{

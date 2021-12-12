@@ -3,24 +3,24 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31911.196
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hebron.Core", "src\Hebron.Core\Hebron.Core.csproj", "{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hebron", "src\Hebron\Hebron.csproj", "{1EA9E421-1FF5-441D-A7AA-46DA43C29216}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HebronTest", "tests\HebronTest\HebronTest.csproj", "{C99B182E-F286-4948-9842-1788CD11375F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|x64 = Debug|x64
-		Debug|x86 = Debug|x86
-		Release|x64 = Release|x64
-		Release|x86 = Release|x86
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x64.ActiveCfg = Debug|x64
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x64.Build.0 = Debug|x64
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x86.ActiveCfg = Debug|x86
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Debug|x86.Build.0 = Debug|x86
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x64.ActiveCfg = Release|x64
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x64.Build.0 = Release|x64
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x86.ActiveCfg = Release|x86
-		{3B84E0D9-60B9-4DE7-9B86-BB3D2779F250}.Release|x86.Build.0 = Release|x86
+		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C99B182E-F286-4948-9842-1788CD11375F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C99B182E-F286-4948-9842-1788CD11375F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C99B182E-F286-4948-9842-1788CD11375F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C99B182E-F286-4948-9842-1788CD11375F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

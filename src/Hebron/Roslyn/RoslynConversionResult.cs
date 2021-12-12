@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 
-namespace Hebron
+namespace Hebron.Roslyn
 {
-	public class ConversionResult
+	public class RoslynConversionResult
 	{
 		public readonly Dictionary<string, string> Enums = new Dictionary<string, string>();
 		public readonly Dictionary<string, string> Constants = new Dictionary<string, string>();
