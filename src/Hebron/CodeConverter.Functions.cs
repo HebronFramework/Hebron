@@ -4,9 +4,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
-namespace Hebron.Roslyn
+namespace Hebron
 {
-	partial class RoslynCodeConverter
+	partial class CodeConverter
 	{
 		private class FieldInfo
 		{
@@ -31,31 +31,16 @@ namespace Hebron.Roslyn
 					continue;
 				}
 
-				Logger.Info("Processing function {0}", cursor.Spelling);
+				var name = cursor.Spelling;
+				Logger.Info("Processing function {0}", name);
 
-				var md = MethodDeclaration(ParseTypeName(funcDecl.ReturnType.ToRoslynType()), cursor.Spelling)
-					.MakePublic()
-					.MakeStatic();
-
-				foreach(var p in funcDecl.Parameters)
+				var parameters = new Dictionary<string, TypeInfo>();
+				foreach (var p in funcDecl.Parameters)
 				{
-					md = md.AddParameterListParameters(Parameter(Identifier(p.Name)).WithType(ParseTypeName(p.Type.ToRoslynType())));
+					parameters[p.Name] = p.Type.ToTypeInfo();
 				}
 
-				foreach(var child in funcDecl.Body.Children)
-				{
-					_functionStatements.Clear();
-					Process(child);
-
-					if (_functionStatements.Count > 0)
-					{
-						md = md.AddBodyStatements(_functionStatements.ToArray());
-					}
-				}
-
-				md = md.AddBodyStatements();
-
-				Result.Functions[cursor.Spelling] = md;
+				Output.Function(name, funcDecl.ReturnType.ToTypeInfo(), parameters);
 			}
 		}
 
@@ -91,7 +76,7 @@ namespace Hebron.Roslyn
 			}
 		}
 
-		private void ProcessDeclaration(VarDecl info, out string left, out string right)
+/*		private void ProcessDeclaration(VarDecl info, out string left, out string right)
 		{
 			var size = info.CursorChildren.Count;
 			var name = info.Spelling.FixSpecialWords();
@@ -221,6 +206,6 @@ namespace Hebron.Roslyn
 			}
 
 			_currentStructInfo = null;
-		}
+		}*/
 	}
 }

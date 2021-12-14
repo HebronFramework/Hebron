@@ -120,21 +120,48 @@ namespace Hebron
 				   type.Kind == CXTypeKind.CXType_VariableArray;
 		}
 
-		public static Type Depoint(this Type type)
+		private static PrimitiveType ToPrimitiveType(this CXType type)
 		{
-			if (type.IsPointerType)
+			switch (type.kind)
 			{
-				return type.PointeeType.Depoint();
+				case CXTypeKind.CXType_Bool:
+					return PrimitiveType.Boolean;
+				case CXTypeKind.CXType_UChar:
+				case CXTypeKind.CXType_Char_U:
+					return PrimitiveType.Byte;
+				case CXTypeKind.CXType_SChar:
+				case CXTypeKind.CXType_Char_S:
+					return PrimitiveType.Sbyte;
+				case CXTypeKind.CXType_UShort:
+					return PrimitiveType.UShort;
+				case CXTypeKind.CXType_Short:
+					return PrimitiveType.Short;
+				case CXTypeKind.CXType_Float:
+					return PrimitiveType.Float;
+				case CXTypeKind.CXType_Double:
+					return PrimitiveType.Double;
+				case CXTypeKind.CXType_Long:
+				case CXTypeKind.CXType_Int:
+					return PrimitiveType.Int;
+				case CXTypeKind.CXType_ULong:
+				case CXTypeKind.CXType_UInt:
+					return PrimitiveType.Uint;
+				case CXTypeKind.CXType_LongLong:
+					return PrimitiveType.Long;
+				case CXTypeKind.CXType_ULongLong:
+					return PrimitiveType.ULong;
+				case CXTypeKind.CXType_Void:
+					return PrimitiveType.Void;
 			}
 
-			return type.PointeeType;
+			throw new Exception(string.Format("Could not convert {0] to primitive type", type.ToString()));
 		}
 
-		public static void ResolveRecord(this CXType type, out bool isStruct, out string name)
+		public static TypeInfo ToTypeInfo(this CXType type)
 		{
-			name = string.Empty;
+			var result = new TypeInfo();
 			var run = true;
-			isStruct = false;
+			var isStruct = false;
 			while (run)
 			{
 				type = type.CanonicalType;
@@ -151,9 +178,11 @@ namespace Hebron
 					case CXTypeKind.CXType_IncompleteArray:
 					case CXTypeKind.CXType_ConstantArray:
 						type = clang.getArrayElementType(type);
+						++result.PointerCount;
 						continue;
 					case CXTypeKind.CXType_Pointer:
 						type = clang.getPointeeType(type);
+						++result.PointerCount;
 						continue;
 					default:
 						isStruct = clang.getTypeSpelling(type).ToString().Contains("struct ");
@@ -164,7 +193,7 @@ namespace Hebron
 
 			if (isStruct)
 			{
-				name = clang.getTypeSpelling(type).ToString();
+				var name = clang.getTypeSpelling(type).ToString();
 				var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
 				if (isConstQualifiedType)
 				{
@@ -172,7 +201,17 @@ namespace Hebron
 				}
 
 				name = name.Replace("struct ", string.Empty);
+
+				result.PrimitiveType = null;
+				result.StructName = name;
+			} else
+			{
+				result.PrimitiveType = type.ToPrimitiveType();
 			}
+
+			return result;
 		}
+
+		public static TypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
 	}
 }

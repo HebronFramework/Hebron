@@ -1,13 +1,14 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
+using Hebron;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 using Type = ClangSharp.Type;
 
-namespace Hebron.Roslyn
+namespace Roslyn
 {
 	internal static class RoslynUtility
 	{
@@ -27,65 +28,6 @@ namespace Hebron.Roslyn
 		public static MethodDeclarationSyntax MakeStatic(this MethodDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.StaticKeyword));
 
 		public static FieldDeclarationSyntax MakeConst(this FieldDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.ConstKeyword));
-
-		private static string ToRoslynTypeInternal(this Type type)
-		{
-			if (type.IsPointerType)
-			{
-				return type.PointeeType.ToRoslynTypeInternal() + "*";
-			}
-
-			switch (type.CanonicalType.Kind)
-			{
-				case CXTypeKind.CXType_Bool:
-					return "bool";
-				case CXTypeKind.CXType_UChar:
-				case CXTypeKind.CXType_Char_U:
-					return "byte";
-				case CXTypeKind.CXType_SChar:
-				case CXTypeKind.CXType_Char_S:
-					return "sbyte";
-				case CXTypeKind.CXType_UShort:
-					return "ushort";
-				case CXTypeKind.CXType_Short:
-					return "short";
-				case CXTypeKind.CXType_Float:
-					return "float";
-				case CXTypeKind.CXType_Double:
-					return "double";
-				case CXTypeKind.CXType_Int:
-					return "int";
-				case CXTypeKind.CXType_UInt:
-					return "uint";
-				case CXTypeKind.CXType_Pointer:
-				case CXTypeKind.CXType_NullPtr: // ugh, what else can I do?
-					return "IntPtr";
-				case CXTypeKind.CXType_Long:
-					return "int";
-				case CXTypeKind.CXType_ULong:
-					return "int";
-				case CXTypeKind.CXType_LongLong:
-					return "long";
-				case CXTypeKind.CXType_ULongLong:
-					return "ulong";
-				case CXTypeKind.CXType_Void:
-					return "void";
-				case CXTypeKind.CXType_Unexposed:
-					if (type.CanonicalType.Kind == CXTypeKind.CXType_Unexposed)
-					{
-						return type.CanonicalType.KindSpelling;
-					}
-
-					return type.CanonicalType.ToRoslynTypeInternal();
-				default:
-					return type.ToString();
-			}
-		}
-
-		public static string ToRoslynType(this Type type)
-		{
-			return type.ToRoslynTypeInternal().Replace("const ", string.Empty);
-		}
 
 		public unsafe static string[] Tokenize(this Cursor cursor, TranslationUnit translationUnit)
 		{
@@ -118,27 +60,86 @@ namespace Hebron.Roslyn
 			return name;
 		}
 
-		public static bool IsStruct(this Type type)
+		public static string ToRoslynString(this TypeInfo type)
 		{
-			bool isStruct;
-			string name;
-			type.Handle.ResolveRecord(out isStruct, out name);
+			var sb = new StringBuilder();
 
-			return isStruct;
-		}
-
-		public static bool IsClass(this Type type, string[] classes)
-		{
-			bool isStruct;
-			string name;
-			type.Handle.ResolveRecord(out isStruct, out name);
-
-			if (!isStruct)
+			if (type.PrimitiveType != null)
 			{
-				return false;
+				switch (type.PrimitiveType.Value)
+				{
+					case PrimitiveType.Boolean:
+						sb.Append("bool");
+						break;
+					case PrimitiveType.Byte:
+						sb.Append("byte");
+						break;
+					case PrimitiveType.Sbyte:
+						sb.Append("sbyte");
+						break;
+					case PrimitiveType.UShort:
+						sb.Append("ushort");
+						break;
+					case PrimitiveType.Short:
+						sb.Append("short");
+						break;
+					case PrimitiveType.Float:
+						sb.Append("float");
+						break;
+					case PrimitiveType.Double:
+						sb.Append("double");
+						break;
+					case PrimitiveType.Int:
+						sb.Append("int");
+						break;
+					case PrimitiveType.Uint:
+						sb.Append("uint");
+						break;
+					case PrimitiveType.Long:
+						sb.Append("long");
+						break;
+					case PrimitiveType.ULong:
+						sb.Append("ulong");
+						break;
+					case PrimitiveType.Void:
+						sb.Append("void");
+						break;
+				}
+			}
+			else
+			{
+				sb.Append(type.StructName);
 			}
 
-			return classes != null && classes.Contains(name);
+			for (var i = 0; i < type.PointerCount; ++i)
+			{
+				sb.Append("*");
+			}
+
+			return sb.ToString();
 		}
+
+		/*		public static bool IsStruct(this Type type)
+				{
+					bool isStruct;
+					string name;
+					type.Handle.ResolveRecord(out isStruct, out name);
+
+					return isStruct;
+				}
+
+				public static bool IsClass(this Type type, string[] classes)
+				{
+					bool isStruct;
+					string name;
+					type.Handle.ResolveRecord(out isStruct, out name);
+
+					if (!isStruct)
+					{
+						return false;
+					}
+
+					return classes != null && classes.Contains(name);
+				}*/
 	}
 }

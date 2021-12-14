@@ -10,7 +10,7 @@ namespace Hebron
     {
         static void Main(string[] args)
         {
-            var parameters = new RoslynConversionParameters
+            var parameters = new ConversionParameters
             {
                 Defines = new[]
                 {
@@ -26,7 +26,11 @@ namespace Hebron
 
             // var result = TextCodeConverter.Convert(parameters.InputPath, parameters.Defines);
 
-            var result = RoslynCodeConverter.Convert(parameters);
+            var roslynOuput = new RoslynOutput();
+
+            CodeConverter.Convert(parameters, roslynOuput);
+
+            var result = roslynOuput.Result;
 
             var cls = ClassDeclaration("StbImage").AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword));
 
