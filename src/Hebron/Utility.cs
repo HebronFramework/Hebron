@@ -7,6 +7,40 @@ using Type = ClangSharp.Type;
 
 namespace Hebron
 {
+	public enum TypeEnum
+	{
+		Primitive,
+		Struct,
+		FunctionPointer
+	}
+
+	public enum PrimitiveType
+	{
+		Boolean,
+		Byte,
+		Sbyte,
+		UShort,
+		Short,
+		Float,
+		Double,
+		Int,
+		Uint,
+		Long,
+		ULong,
+		Void
+	}
+
+	public class TypeInfo
+	{
+		public TypeEnum Type;
+		public PrimitiveType? PrimitiveType;
+		public string StructName;
+		public string FunctionPointerName;
+		public int PointerCount;
+
+		public bool IsStruct => !string.IsNullOrEmpty(StructName);
+	}
+
 	internal static class Utility
 	{
 		public static unsafe TranslationUnit Compile(string inputPath, string[] defines)
@@ -161,7 +195,8 @@ namespace Hebron
 		{
 			var result = new TypeInfo();
 			var run = true;
-			var isStruct = false;
+
+			var typeEnum = TypeEnum.Primitive;
 			while (run)
 			{
 				type = type.CanonicalType;
@@ -170,7 +205,7 @@ namespace Hebron
 				{
 					case CXTypeKind.CXType_Record:
 						{
-							isStruct = true;
+							typeEnum = TypeEnum.Struct;
 							run = false;
 							break;
 						}
@@ -184,29 +219,42 @@ namespace Hebron
 						type = clang.getPointeeType(type);
 						++result.PointerCount;
 						continue;
+					case CXTypeKind.CXType_FunctionProto:
+						typeEnum = TypeEnum.FunctionPointer;
+						run = false;
+						break;
 					default:
-						isStruct = clang.getTypeSpelling(type).ToString().Contains("struct ");
+						typeEnum = TypeEnum.Struct;
 						run = false;
 						break;
 				}
 			}
 
-			if (isStruct)
+			switch (typeEnum)
 			{
-				var name = clang.getTypeSpelling(type).ToString();
-				var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
-				if (isConstQualifiedType)
-				{
-					name = name.Replace("const ", string.Empty);
-				}
+				case TypeEnum.Primitive:
+					result.Type = TypeEnum.Primitive;
+					result.PrimitiveType = type.ToPrimitiveType();
+					break;
+				case TypeEnum.Struct:
+					{
+						var name = clang.getTypeSpelling(type).ToString();
+						var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
+						if (isConstQualifiedType)
+						{
+							name = name.Replace("const ", string.Empty);
+						}
 
-				name = name.Replace("struct ", string.Empty);
+						name = name.Replace("struct ", string.Empty);
 
-				result.PrimitiveType = null;
-				result.StructName = name;
-			} else
-			{
-				result.PrimitiveType = type.ToPrimitiveType();
+						result.Type = TypeEnum.Struct;
+						result.StructName = name;
+					}
+					break;
+				case TypeEnum.FunctionPointer:
+					result.Type = TypeEnum.FunctionPointer;
+					result.FunctionPointerName = clang.getTypeSpelling(type).ToString();
+					break;
 			}
 
 			return result;

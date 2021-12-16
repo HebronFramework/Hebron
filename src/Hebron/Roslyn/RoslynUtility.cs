@@ -1,14 +1,12 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
-using Hebron;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
-using Type = ClangSharp.Type;
 
-namespace Roslyn
+namespace Hebron.Roslyn
 {
 	internal static class RoslynUtility
 	{
@@ -60,56 +58,49 @@ namespace Roslyn
 			return name;
 		}
 
-		public static string ToRoslynString(this TypeInfo type)
+		public static string ToRoslynTypeName(this TypeInfo type)
 		{
-			var sb = new StringBuilder();
-
 			if (type.PrimitiveType != null)
 			{
 				switch (type.PrimitiveType.Value)
 				{
 					case PrimitiveType.Boolean:
-						sb.Append("bool");
-						break;
+						return "bool";
 					case PrimitiveType.Byte:
-						sb.Append("byte");
-						break;
+						return "byte";
 					case PrimitiveType.Sbyte:
-						sb.Append("sbyte");
-						break;
+						return "sbyte";
 					case PrimitiveType.UShort:
-						sb.Append("ushort");
-						break;
+						return "ushort";
 					case PrimitiveType.Short:
-						sb.Append("short");
-						break;
+						return "short";
 					case PrimitiveType.Float:
-						sb.Append("float");
-						break;
+						return "float";
 					case PrimitiveType.Double:
-						sb.Append("double");
-						break;
+						return "double";
 					case PrimitiveType.Int:
-						sb.Append("int");
-						break;
+						return "int";
 					case PrimitiveType.Uint:
-						sb.Append("uint");
-						break;
+						return "uint";
 					case PrimitiveType.Long:
-						sb.Append("long");
-						break;
+						return "long";
 					case PrimitiveType.ULong:
-						sb.Append("ulong");
-						break;
+						return "ulong";
 					case PrimitiveType.Void:
-						sb.Append("void");
-						break;
+						return "void";
 				}
 			}
-			else
-			{
-				sb.Append(type.StructName);
-			}
+
+			return type.StructName;
+		}
+
+		public static string ToRoslynTypeName(this CXType type) => type.ToTypeInfo().ToRoslynTypeName();
+		public static string ToRoslynTypeName(this Type type) => type.Handle.ToRoslynTypeName();
+
+		public static string ToRoslynString(this TypeInfo type)
+		{
+			var sb = new StringBuilder();
+			sb.Append(type.ToRoslynTypeName());
 
 			for (var i = 0; i < type.PointerCount; ++i)
 			{
@@ -119,27 +110,12 @@ namespace Roslyn
 			return sb.ToString();
 		}
 
-		/*		public static bool IsStruct(this Type type)
-				{
-					bool isStruct;
-					string name;
-					type.Handle.ResolveRecord(out isStruct, out name);
+		public static string ToRoslynString(this CXType type) => type.ToTypeInfo().ToRoslynString();
+		public static string ToRoslynString(this Type type) => type.Handle.ToRoslynString();
 
-					return isStruct;
-				}
-
-				public static bool IsClass(this Type type, string[] classes)
-				{
-					bool isStruct;
-					string name;
-					type.Handle.ResolveRecord(out isStruct, out name);
-
-					if (!isStruct)
-					{
-						return false;
-					}
-
-					return classes != null && classes.Contains(name);
-				}*/
+		public static VariableDeclarationSyntax VariableDeclaration(this Type type, string name)
+		{
+			return SyntaxFactory.VariableDeclaration(ParseTypeName(type.ToRoslynString())).AddVariables(VariableDeclarator(name));
+		}
 	}
 }

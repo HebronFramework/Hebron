@@ -2,21 +2,32 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
+using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
-namespace Hebron
+namespace Hebron.Roslyn
 {
-	partial class CodeConverter
+	partial class RoslynCodeConverter
 	{
+		private enum State
+		{
+			Structs,
+			GlobalVariables,
+			Enums,
+			Constants,
+			Functions
+		}
+
+
 		private class FieldInfo
 		{
 			public string Name;
 			public Type Type;
 		}
 
-		private readonly List<StatementSyntax> _functionStatements = new List<StatementSyntax>();
 		private List<FieldInfo> _currentStructInfo;
 		private readonly Dictionary<string, List<FieldInfo>> _visitedStructs = new Dictionary<string, List<FieldInfo>>();
+		private State _state = State.Functions;
 
 
 		public void ConvertFunctions()
@@ -31,80 +42,105 @@ namespace Hebron
 					continue;
 				}
 
-				var name = cursor.Spelling;
-				Logger.Info("Processing function {0}", name);
+				Logger.Info("Processing function {0}", cursor.Spelling);
 
-				var parameters = new Dictionary<string, TypeInfo>();
-				foreach (var p in funcDecl.Parameters)
+				var md = MethodDeclaration(ParseTypeName(funcDecl.ReturnType.ToRoslynString()), cursor.Spelling)
+					.MakePublic()
+					.MakeStatic();
+
+				foreach(var p in funcDecl.Parameters)
 				{
-					parameters[p.Name] = p.Type.ToTypeInfo();
+					md = md.AddParameterListParameters(Parameter(Identifier(p.Name)).WithType(ParseTypeName(p.Type.ToRoslynString())));
 				}
 
-				Output.Function(name, funcDecl.ReturnType.ToTypeInfo(), parameters);
+				foreach(var child in funcDecl.Body.Children)
+				{
+					var result = Process(child);
+					if (result == null)
+					{
+						continue;
+					}
+					foreach (var stmt in Process(child))
+					{
+						if (stmt == null)
+						{
+							continue;
+						}
+
+						md = md.AddBodyStatements((StatementSyntax)stmt);
+					}
+				}
+
+				md = md.AddBodyStatements();
+
+				Result.Functions[cursor.Spelling] = md;
 			}
 		}
 
 
-		private void ProcessPossibleChildByIndex(Stmt child, int index)
+		private IEnumerable<SyntaxNode> ProcessPossibleChildByIndex(Cursor child, int index)
 		{
-			if (child.Children.Count <= index)
+			if (child.CursorChildren.Count <= index)
 			{
-				return;
+				return null;
 			}
 
-			Process(child.Children[index]);
+			return Process(child.CursorChildren[index]);
 		}
 
-		private void Process(IEnumerable<Cursor> children)
+		private IEnumerable<SyntaxNode> Process(IEnumerable<Cursor> children)
 		{
+			var result = new List<SyntaxNode>();
 			foreach(var child in children)
 			{
-				Process(child);
+				result.AddRange(Process(child));
 			}
+
+			return result;
 		}
 
-		private void Process(Cursor child)
+		private IEnumerable<SyntaxNode> Process(Cursor child)
 		{
 			switch (child)
 			{
 				case DeclStmt declStmt:
-					Process(declStmt.CursorChildren);
-					break;
+					return Process(declStmt.CursorChildren);
 				case VarDecl varDecl:
-
-					break;
+					{
+						return new[] 
+						{
+							LocalDeclarationStatement(varDecl.Type.VariableDeclaration(varDecl.Name))
+						};
+					}
 			}
+
+			return null;
 		}
 
-/*		private void ProcessDeclaration(VarDecl info, out string left, out string right)
+		private bool IsClass(string name)
 		{
+			return Parameters.Classes.Contains(name);
+		}
+
+/*		private void ProcessDeclaration(VarDecl info, out SyntaxNode left, out SyntaxNode right)
+		{
+			SyntaxNode rvalue;
+
 			var size = info.CursorChildren.Count;
 			var name = info.Spelling.FixSpecialWords();
 
-			var tt = info.Type;
-			if (tt.IsArray())
+			var tt = info.Type.ToTypeInfo();
+			if (tt.IsStruct)
 			{
-				tt = info.Type.PointeeType;
-			}
-
-
-			if (tt.IsClass(Parameters.Classes) || tt.IsStruct())
-			{
-				_visitedStructs.TryGetValue(tt.ToCSharpTypeString(), out _currentStructInfo);
+				_visitedStructs.TryGetValue(tt.ToRoslynTypeName(), out _currentStructInfo);
 			}
 
 			if (size > 0)
 			{
-				rvalue = ProcessPossibleChildByIndex(info.Cursor, size - 1);
+				rvalue = ProcessPossibleChildByIndex(info, size - 1);
 
 				if (info.Type.IsArray())
 				{
-					var arrayType = info.Type.GetPointeeType().ToCSharpTypeString();
-					if (_state == State.Functions && !info.Type.GetPointeeType().IsClass())
-					{
-						info.CsType = info.Type.ToCSharpTypeString(true);
-					}
-
 					var t = info.Type.GetPointeeType().ToCSharpTypeString();
 
 					if (rvalue.Info.Kind == CXCursorKind.CXCursor_TypeRef || rvalue.Info.Kind == CXCursorKind.CXCursor_IntegerLiteral ||
