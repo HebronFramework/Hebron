@@ -7,13 +7,6 @@ using Type = ClangSharp.Type;
 
 namespace Hebron
 {
-	public enum TypeEnum
-	{
-		Primitive,
-		Struct,
-		FunctionPointer
-	}
-
 	public enum PrimitiveType
 	{
 		Boolean,
@@ -30,15 +23,120 @@ namespace Hebron
 		Void
 	}
 
-	public class TypeInfo
+	public abstract class BaseTypeInfo
 	{
-		public TypeEnum Type;
-		public PrimitiveType? PrimitiveType;
-		public string StructName;
-		public string FunctionPointerName;
-		public int PointerCount;
+		private string _fullTypeString;
 
-		public bool IsStruct => !string.IsNullOrEmpty(StructName);
+		public int PointerCount { get; private set; }
+		public int? ConstantArraySize { get; private set; }
+
+		public string TypeString
+		{
+			get
+			{
+				if (string.IsNullOrEmpty(_fullTypeString))
+				{
+					var sb = new StringBuilder();
+					sb.Append(BuildTypeString());
+
+					if (PointerCount > 0)
+					{
+						sb.Append(" ");
+					}
+
+					for(var i = 0; i < PointerCount; ++i)
+					{
+						sb.Append("*");
+					}
+
+					_fullTypeString = sb.ToString();
+				}
+
+				return _fullTypeString;
+			}
+		}
+
+		public BaseTypeInfo(int pointerCount, int? constantArraySize)
+		{
+			if (pointerCount < 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(pointerCount));
+			}
+
+			if (constantArraySize != null && constantArraySize.Value < 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(constantArraySize));
+			}
+
+			PointerCount = pointerCount;
+			ConstantArraySize = constantArraySize;
+		}
+
+		public abstract string BuildTypeString();
+
+		public override string ToString() => TypeString;
+	}
+
+	public class PrimitiveTypeInfo : BaseTypeInfo
+	{
+		public PrimitiveType PrimitiveType { get; private set; }
+
+		public PrimitiveTypeInfo(PrimitiveType primiveType, int pointerCount, int? constantArraySize): base(pointerCount, constantArraySize)
+		{
+			PrimitiveType = primiveType;
+		}
+
+		public override string BuildTypeString() => PrimitiveType.ToString();
+	}
+
+	public class StructTypeInfo : BaseTypeInfo
+	{
+		public string StructName { get; private set; }
+
+		public StructTypeInfo(string structName, int pointerCount, int? constantArraySize) : base(pointerCount, constantArraySize)
+		{
+			StructName = structName;
+		}
+
+		public override string BuildTypeString() => StructName;
+	}
+
+	public class FunctionPointerTypeInfo : BaseTypeInfo
+	{
+		public BaseTypeInfo ReturnType { get; private set; }
+		public BaseTypeInfo[] Arguments { get; private set; }
+
+		public FunctionPointerTypeInfo(BaseTypeInfo returnType, BaseTypeInfo[] arguments,
+			int pointerCount, int? constantArraySize) : base(pointerCount, constantArraySize)
+		{
+			ReturnType = returnType ?? throw new ArgumentNullException(nameof(returnType));
+			Arguments = arguments;
+		}
+
+		public override string BuildTypeString()
+		{
+			var sb = new StringBuilder();
+
+			sb.Append(ReturnType.TypeString);
+			sb.Append("(");
+
+			if (Arguments != null)
+			{
+				for(var i = 0; i < Arguments.Length; ++i)
+				{
+					sb.Append(Arguments[0]);
+
+					if (i < Arguments.Length - 1)
+					{
+						sb.Append(", ");
+					}
+				}
+			}
+
+			sb.Append(")");
+
+			return sb.ToString();
+		}
 	}
 
 	internal static class Utility
@@ -154,9 +252,9 @@ namespace Hebron
 				   type.Kind == CXTypeKind.CXType_VariableArray;
 		}
 
-		private static PrimitiveType ToPrimitiveType(this CXType type)
+		private static PrimitiveType? ToPrimitiveType(this CXTypeKind kind)
 		{
-			switch (type.kind)
+			switch (kind)
 			{
 				case CXTypeKind.CXType_Bool:
 					return PrimitiveType.Boolean;
@@ -188,55 +286,64 @@ namespace Hebron
 					return PrimitiveType.Void;
 			}
 
-			throw new Exception(string.Format("Could not convert {0] to primitive type", type.ToString()));
+			return null;
 		}
 
-		public static TypeInfo ToTypeInfo(this CXType type)
+		public static BaseTypeInfo ToTypeInfo(this CXType type)
 		{
-			var result = new TypeInfo();
 			var run = true;
+			int typeEnum = 0;
+			int pointerCount = 0;
+			int? constantArraySize = null;
 
-			var typeEnum = TypeEnum.Primitive;
 			while (run)
 			{
 				type = type.CanonicalType;
+
+				var primitiveType = type.kind.ToPrimitiveType();
+				if (primitiveType != null)
+				{
+					break;
+				}
 
 				switch (type.kind)
 				{
 					case CXTypeKind.CXType_Record:
 						{
-							typeEnum = TypeEnum.Struct;
+							typeEnum = 1;
 							run = false;
 							break;
 						}
 
 					case CXTypeKind.CXType_IncompleteArray:
 					case CXTypeKind.CXType_ConstantArray:
+						constantArraySize = (int)type.ArraySize;
 						type = clang.getArrayElementType(type);
-						++result.PointerCount;
+						++pointerCount;
 						continue;
 					case CXTypeKind.CXType_Pointer:
 						type = clang.getPointeeType(type);
-						++result.PointerCount;
+						++pointerCount;
 						continue;
 					case CXTypeKind.CXType_FunctionProto:
-						typeEnum = TypeEnum.FunctionPointer;
+						typeEnum = 2;
 						run = false;
 						break;
 					default:
-						typeEnum = TypeEnum.Struct;
+						typeEnum = 1;
 						run = false;
 						break;
 				}
 			}
 
+			BaseTypeInfo result = null;
+
 			switch (typeEnum)
 			{
-				case TypeEnum.Primitive:
-					result.Type = TypeEnum.Primitive;
-					result.PrimitiveType = type.ToPrimitiveType();
+				case 0:
+					result = new PrimitiveTypeInfo(type.kind.ToPrimitiveType().Value, pointerCount, constantArraySize);
 					break;
-				case TypeEnum.Struct:
+				case 1:
 					{
 						var name = clang.getTypeSpelling(type).ToString();
 						var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
@@ -246,20 +353,24 @@ namespace Hebron
 						}
 
 						name = name.Replace("struct ", string.Empty);
-
-						result.Type = TypeEnum.Struct;
-						result.StructName = name;
+						result = new StructTypeInfo(name, pointerCount, constantArraySize);
 					}
 					break;
-				case TypeEnum.FunctionPointer:
-					result.Type = TypeEnum.FunctionPointer;
-					result.FunctionPointerName = clang.getTypeSpelling(type).ToString();
+				case 2:
+					var args = new List<BaseTypeInfo>();
+					for(var i = 0; i < type.NumArgTypes; ++i)
+					{
+						var arg = type.GetArgType((uint)i);
+						args.Add(arg.ToTypeInfo());
+					}
+
+					result = new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray(), pointerCount, constantArraySize);
 					break;
 			}
 
 			return result;
 		}
 
-		public static TypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
+		public static BaseTypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
 	}
 }

@@ -29,7 +29,8 @@ namespace Hebron
 
             var result = RoslynCodeConverter.Convert(parameters);
 
-            var cls = ClassDeclaration("StbImage").AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword));
+            var cls = ClassDeclaration("StbImage")
+                .AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword), Token(SyntaxKind.UnsafeKeyword));
 
             foreach (var pair in result.NamedEnums)
             {
@@ -37,6 +38,11 @@ namespace Hebron
             }
 
             foreach (var pair in result.UnnamedEnumValues)
+            {
+                cls = cls.AddMembers(pair.Value);
+            }
+
+            foreach (var pair in result.Delegates)
             {
                 cls = cls.AddMembers(pair.Value);
             }

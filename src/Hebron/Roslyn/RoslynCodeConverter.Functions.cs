@@ -18,7 +18,6 @@ namespace Hebron.Roslyn
 			Functions
 		}
 
-
 		private class FieldInfo
 		{
 			public string Name;
@@ -44,13 +43,13 @@ namespace Hebron.Roslyn
 
 				Logger.Info("Processing function {0}", cursor.Spelling);
 
-				var md = MethodDeclaration(ParseTypeName(funcDecl.ReturnType.ToRoslynString()), cursor.Spelling)
+				var md = MethodDeclaration(ParseTypeName(ToRoslynString(funcDecl.ReturnType)), cursor.Spelling)
 					.MakePublic()
 					.MakeStatic();
 
 				foreach(var p in funcDecl.Parameters)
 				{
-					md = md.AddParameterListParameters(Parameter(Identifier(p.Name)).WithType(ParseTypeName(p.Type.ToRoslynString())));
+					md = md.AddParameterListParameters(Parameter(Identifier(p.Name)).WithType(ParseTypeName(ToRoslynString(p.Type))));
 				}
 
 				foreach(var child in funcDecl.Body.Children)
@@ -109,17 +108,12 @@ namespace Hebron.Roslyn
 					{
 						return new[] 
 						{
-							LocalDeclarationStatement(varDecl.Type.VariableDeclaration(varDecl.Name))
+							LocalDeclarationStatement(VariableDeclaration2(varDecl.Type, varDecl.Name))
 						};
 					}
 			}
 
 			return null;
-		}
-
-		private bool IsClass(string name)
-		{
-			return Parameters.Classes.Contains(name);
 		}
 
 /*		private void ProcessDeclaration(VarDecl info, out SyntaxNode left, out SyntaxNode right)
