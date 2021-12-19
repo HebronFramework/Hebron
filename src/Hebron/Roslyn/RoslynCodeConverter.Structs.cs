@@ -1,8 +1,7 @@
 ﻿using ClangSharp;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System;
 using System.Collections.Generic;
+using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace Hebron.Roslyn
@@ -31,6 +30,76 @@ namespace Hebron.Roslyn
 			return false;
 		}
 
+		private TypeDeclarationSyntax FillTypeDeclaration(Cursor cursor, string name, TypeDeclarationSyntax typeDecl)
+		{
+			typeDecl = typeDecl.MakePublic();
+
+			foreach (NamedDecl child in cursor.CursorChildren)
+			{
+				if (child is RecordDecl)
+				{
+					continue;
+				}
+
+				var asField = (FieldDecl)child;
+				var childType = asField.Type;
+				var childName = asField.Name.FixSpecialWords();
+				var typeInfo = asField.Type.ToTypeInfo();
+
+				FieldDeclarationSyntax fieldDecl = null;
+				if (typeInfo.ConstantArraySizes != null && typeInfo.ConstantArraySizes.Length > 0)
+				{
+					if (!IsClass(name) && typeInfo is PrimitiveTypeInfo && typeInfo.ConstantArraySizes.Length == 1)
+					{
+						var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
+							childName + "[" + typeInfo.ConstantArraySizes[0] + "];";
+
+						fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+					}
+					else
+					{
+						if (typeInfo.TypeString.Contains("unnamed "))
+						{
+							// unnamed struct
+							var subName = "unnamed1";
+							TypeDeclarationSyntax subTypeDecl = StructDeclaration(subName);
+							subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl);
+							typeDecl = typeDecl.AddMembers(subTypeDecl);
+
+							typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
+						}
+
+						var roslynString = ToRoslynTypeName(typeInfo);
+						var arrayTypeName = "Array" + typeInfo.ConstantArraySizes.Length + "D<" + roslynString + ">";
+
+						var sb = new StringBuilder();
+						for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
+						{
+							sb.Append(typeInfo.ConstantArraySizes[i]);
+							if (i < typeInfo.ConstantArraySizes.Length - 1)
+							{
+								sb.Append(",");
+							}
+						}
+
+						var expr = "public " + arrayTypeName + " " + childName +
+							" = new " + arrayTypeName + "(" + sb.ToString() + ");";
+
+						fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+					}
+				}
+				else
+				{
+					var variableDecl = VariableDeclaration2(asField.Type, childName);
+					fieldDecl = FieldDeclaration(variableDecl);
+				}
+
+				typeDecl = typeDecl.AddMembers(fieldDecl);
+			}
+
+			return typeDecl;
+		}
+
 		public void ConvertStructs()
 		{
 			Logger.Info("Processing structs...");
@@ -46,9 +115,16 @@ namespace Hebron.Roslyn
 
 				var recordDecl = (RecordDecl)cursor;
 				var name = recordDecl.TypeForDecl.AsString;
-				foreach (FieldDecl child in cursor.CursorChildren)
+				foreach (NamedDecl child in cursor.CursorChildren)
 				{
-					var asStruct = child.Type.ToTypeInfo() as StructTypeInfo;
+					if (child is RecordDecl)
+					{
+						continue;
+					}
+
+					var asField = (FieldDecl)child;
+					var typeInfo = asField.Type.ToTypeInfo();
+					var asStruct = typeInfo as StructTypeInfo;
 					if (asStruct != null)
 					{
 						List<string> names;
@@ -59,19 +135,25 @@ namespace Hebron.Roslyn
 						}
 
 						names.Add(asStruct.StructName);
+						if (asStruct.IsArray)
+						{
+							Logger.Info("Marking struct {0} as class since it contains array of type {1}", name, asStruct.StructName);
+							Classes.Add(name);
+							break;
+						}
 					}
 
-					if (asStruct != null && asStruct.ConstantArraySize != null)
+					var asFunctionPointer = typeInfo as FunctionPointerTypeInfo;
+					if (asFunctionPointer != null)
 					{
-						Logger.Info("Marking struct {0} as class since it contains array of type {1}", name, asStruct.StructName);
+						Logger.Info("Marking struct {0} as class since it contains function pointers", name);
 						Classes.Add(name);
 						break;
 					}
 
-					var asFunctionPointer = child.Type.ToTypeInfo() as FunctionPointerTypeInfo;
-					if (asFunctionPointer != null)
+					if (typeInfo.IsArray && typeInfo.ConstantArraySizes.Length > 1)
 					{
-						Logger.Info("Marking struct {0} as class since it contains function pointers", name);
+						Logger.Info("Marking struct {0} as class since it contains multidimensional arrays", name);
 						Classes.Add(name);
 						break;
 					}
@@ -108,11 +190,6 @@ namespace Hebron.Roslyn
 				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
 				Logger.Info("Generating code for struct {0}", name);
 
-				if (name == "stbi__jpeg")
-				{
-					var k = 5;
-				}
-
 				TypeDeclarationSyntax typeDecl;
 				if (Classes.Contains(name))
 				{
@@ -123,57 +200,7 @@ namespace Hebron.Roslyn
 					typeDecl = StructDeclaration(name);
 				}
 
-				typeDecl = typeDecl.MakePublic();
-
-				var destructorStatements = new List<StatementSyntax>();
-				foreach (FieldDecl child in cursor.CursorChildren)
-				{
-					var childType = child.Type;
-					var childName = child.Name.FixSpecialWords();
-					var typeInfo = child.Type.ToTypeInfo();
-
-					FieldDeclarationSyntax fieldDecl = null;
-					if (typeInfo.ConstantArraySize != null)
-					{
-						if (!IsClass(name) && typeInfo is PrimitiveTypeInfo)
-						{
-							var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
-								childName + "[" + typeInfo.ConstantArraySize.Value + "];";
-
-							fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-						}
-						else
-						{
-							var roslynString = ToRoslynString(typeInfo);
-							var expr = "public " + roslynString + " " + childName +
-								" = (" + roslynString + ")CRuntime.malloc(" + typeInfo.ConstantArraySize.Value + ");";
-
-							fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-
-							expr = "CRuntime.free(" + childName + ");";
-							var destructorStatement = ParseStatement(expr);
-							destructorStatements.Add(destructorStatement);
-						}
-					}
-					else
-					{
-						var variableDecl = VariableDeclaration2(child.Type, childName);
-						fieldDecl = FieldDeclaration(variableDecl);
-					}
-
-					typeDecl = typeDecl.AddMembers(fieldDecl);
-				}
-
-				if (destructorStatements.Count > 0)
-				{
-					var destructor = DestructorDeclaration(Identifier(name));
-					foreach (var stmt in destructorStatements)
-					{
-						destructor = destructor.AddBodyStatements(stmt);
-					}
-
-					typeDecl = typeDecl.AddMembers(destructor);
-				}
+				typeDecl = FillTypeDeclaration(cursor, name, typeDecl);
 
 				Result.Structs[name] = typeDecl;
 			}

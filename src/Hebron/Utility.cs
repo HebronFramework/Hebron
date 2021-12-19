@@ -25,51 +25,63 @@ namespace Hebron
 
 	public abstract class BaseTypeInfo
 	{
-		private string _fullTypeString;
+		private string _typeName, _typeString;
 
 		public int PointerCount { get; private set; }
-		public int? ConstantArraySize { get; private set; }
+
+		public int[] ConstantArraySizes { get; private set; }
+
+		public bool IsArray => ConstantArraySizes != null && ConstantArraySizes.Length > 0;
+		public bool IsPointer => PointerCount > 0;
+
+		public string TypeName
+		{
+			get
+			{
+				if (string.IsNullOrEmpty(_typeName))
+				{
+					_typeName = BuildTypeString();
+				}
+
+				return _typeName;
+			}
+		}
 
 		public string TypeString
 		{
 			get
 			{
-				if (string.IsNullOrEmpty(_fullTypeString))
+				if (string.IsNullOrEmpty(_typeString))
 				{
 					var sb = new StringBuilder();
-					sb.Append(BuildTypeString());
+					sb.Append(TypeName);
 
 					if (PointerCount > 0)
 					{
 						sb.Append(" ");
 					}
 
-					for(var i = 0; i < PointerCount; ++i)
+					for (var i = 0; i < PointerCount; ++i)
 					{
 						sb.Append("*");
 					}
 
-					_fullTypeString = sb.ToString();
+					_typeString = sb.ToString();
 				}
 
-				return _fullTypeString;
+				return _typeString;
 			}
 		}
 
-		public BaseTypeInfo(int pointerCount, int? constantArraySize)
+		public BaseTypeInfo(int pointerCount, int[] constantArraySizes)
 		{
 			if (pointerCount < 0)
 			{
 				throw new ArgumentOutOfRangeException(nameof(pointerCount));
 			}
 
-			if (constantArraySize != null && constantArraySize.Value < 0)
-			{
-				throw new ArgumentOutOfRangeException(nameof(constantArraySize));
-			}
-
+			ConstantArraySizes = constantArraySizes;
 			PointerCount = pointerCount;
-			ConstantArraySize = constantArraySize;
 		}
 
 		public abstract string BuildTypeString();
@@ -81,7 +93,7 @@ namespace Hebron
 	{
 		public PrimitiveType PrimitiveType { get; private set; }
 
-		public PrimitiveTypeInfo(PrimitiveType primiveType, int pointerCount, int? constantArraySize): base(pointerCount, constantArraySize)
+		public PrimitiveTypeInfo(PrimitiveType primiveType, int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
 		{
 			PrimitiveType = primiveType;
 		}
@@ -93,7 +105,7 @@ namespace Hebron
 	{
 		public string StructName { get; private set; }
 
-		public StructTypeInfo(string structName, int pointerCount, int? constantArraySize) : base(pointerCount, constantArraySize)
+		public StructTypeInfo(string structName, int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
 		{
 			StructName = structName;
 		}
@@ -107,7 +119,7 @@ namespace Hebron
 		public BaseTypeInfo[] Arguments { get; private set; }
 
 		public FunctionPointerTypeInfo(BaseTypeInfo returnType, BaseTypeInfo[] arguments,
-			int pointerCount, int? constantArraySize) : base(pointerCount, constantArraySize)
+			int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
 		{
 			ReturnType = returnType ?? throw new ArgumentNullException(nameof(returnType));
 			Arguments = arguments;
@@ -122,7 +134,7 @@ namespace Hebron
 
 			if (Arguments != null)
 			{
-				for(var i = 0; i < Arguments.Length; ++i)
+				for (var i = 0; i < Arguments.Length; ++i)
 				{
 					sb.Append(Arguments[0]);
 
@@ -226,7 +238,7 @@ namespace Hebron
 
 		public static string GetLiteralString(this CXCursor cursor)
 		{
-			switch(cursor.Kind)
+			switch (cursor.Kind)
 			{
 				case CXCursorKind.CXCursor_IntegerLiteral:
 					return clangsharp.Cursor_getIntegerLiteralValue(cursor).ToString();
@@ -245,12 +257,23 @@ namespace Hebron
 
 		public static string GetLiteralString(this Cursor cursor) => GetLiteralString(cursor.Handle);
 
-		public static bool IsArray(this Type type)
+		public static string GetOperatorString(this CXCursor cursor)
 		{
-			return type.Kind == CXTypeKind.CXType_ConstantArray ||
-				   type.Kind == CXTypeKind.CXType_DependentSizedArray ||
-				   type.Kind == CXTypeKind.CXType_VariableArray;
+			if (cursor.kind == CXCursorKind.CXCursor_BinaryOperator ||
+				cursor.kind == CXCursorKind.CXCursor_CompoundAssignOperator)
+			{
+				return clangsharp.Cursor_getBinaryOpcodeSpelling(clangsharp.Cursor_getBinaryOpcode(cursor)).CString;
+			}
+
+			if (cursor.kind == CXCursorKind.CXCursor_UnaryOperator)
+			{
+				return clangsharp.Cursor_getUnaryOpcodeSpelling(clangsharp.Cursor_getUnaryOpcode(cursor)).CString;
+			}
+
+			return string.Empty;
 		}
+
+		public static string GetOperatorString(this Cursor cursor) => GetOperatorString(cursor.Handle);
 
 		private static PrimitiveType? ToPrimitiveType(this CXTypeKind kind)
 		{
@@ -294,7 +317,7 @@ namespace Hebron
 			var run = true;
 			int typeEnum = 0;
 			int pointerCount = 0;
-			int? constantArraySize = null;
+			var constantArraySizes = new List<int>();
 
 			while (run)
 			{
@@ -317,7 +340,7 @@ namespace Hebron
 
 					case CXTypeKind.CXType_IncompleteArray:
 					case CXTypeKind.CXType_ConstantArray:
-						constantArraySize = (int)type.ArraySize;
+						constantArraySizes.Add((int)type.ArraySize);
 						type = clang.getArrayElementType(type);
 						++pointerCount;
 						continue;
@@ -341,7 +364,7 @@ namespace Hebron
 			switch (typeEnum)
 			{
 				case 0:
-					result = new PrimitiveTypeInfo(type.kind.ToPrimitiveType().Value, pointerCount, constantArraySize);
+					result = new PrimitiveTypeInfo(type.kind.ToPrimitiveType().Value, pointerCount, constantArraySizes.ToArray());
 					break;
 				case 1:
 					{
@@ -353,18 +376,18 @@ namespace Hebron
 						}
 
 						name = name.Replace("struct ", string.Empty);
-						result = new StructTypeInfo(name, pointerCount, constantArraySize);
+						result = new StructTypeInfo(name, pointerCount, constantArraySizes.ToArray());
 					}
 					break;
 				case 2:
 					var args = new List<BaseTypeInfo>();
-					for(var i = 0; i < type.NumArgTypes; ++i)
+					for (var i = 0; i < type.NumArgTypes; ++i)
 					{
 						var arg = type.GetArgType((uint)i);
 						args.Add(arg.ToTypeInfo());
 					}
 
-					result = new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray(), pointerCount, constantArraySize);
+					result = new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray(), pointerCount, constantArraySizes.ToArray());
 					break;
 			}
 
@@ -372,5 +395,83 @@ namespace Hebron
 		}
 
 		public static BaseTypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
+		public static BaseTypeInfo ToTypeInfo(this CXCursor cursor) => cursor.Type.ToTypeInfo();
+		public static BaseTypeInfo ToTypeInfo(this Cursor cursor) => cursor.Handle.ToTypeInfo();
+
+		public unsafe static string[] Tokenize(this Cursor cursor, TranslationUnit translationUnit)
+		{
+			CXToken* tokens = null;
+			uint numTokens;
+			clang.tokenize(translationUnit.Handle, cursor.Extent, &tokens, &numTokens);
+
+			var result = new List<string>();
+			for (uint i = 0; i < numTokens; ++i)
+			{
+				var name = clang.getTokenSpelling(translationUnit.Handle, tokens[i]).ToString();
+				result.Add(name);
+			}
+
+			return result.ToArray();
+		}
+
+		public static bool IsLogicalBooleanOperator(this CX_BinaryOperatorKind op)
+		{
+			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||
+				   op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_GE ||
+				   op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT;
+		}
+
+		public static bool IsLogicalBinaryOperator(this CX_BinaryOperatorKind op)
+		{
+			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr;
+		}
+
+		public static bool IsBinaryOperator(this CX_BinaryOperatorKind op)
+		{
+			return op == CX_BinaryOperatorKind.CX_BO_And || op == CX_BinaryOperatorKind.CX_BO_Or;
+		}
+
+		public static bool IsAssign(this CX_BinaryOperatorKind op)
+		{
+			return op == CX_BinaryOperatorKind.CX_BO_AddAssign || op == CX_BinaryOperatorKind.CX_BO_AndAssign ||
+				   op == CX_BinaryOperatorKind.CX_BO_Assign || op == CX_BinaryOperatorKind.CX_BO_DivAssign ||
+				   op == CX_BinaryOperatorKind.CX_BO_MulAssign || op == CX_BinaryOperatorKind.CX_BO_OrAssign ||
+				   op == CX_BinaryOperatorKind.CX_BO_RemAssign || op == CX_BinaryOperatorKind.CX_BO_ShlAssign ||
+				   op == CX_BinaryOperatorKind.CX_BO_ShrAssign || op == CX_BinaryOperatorKind.CX_BO_SubAssign ||
+				   op == CX_BinaryOperatorKind.CX_BO_XorAssign;
+		}
+
+		public static bool IsBooleanOperator(this CX_BinaryOperatorKind op)
+		{
+			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||
+				   op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_NE ||
+				   op == CX_BinaryOperatorKind.CX_BO_GE || op == CX_BinaryOperatorKind.CX_BO_LE ||
+				   op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT ||
+				   op == CX_BinaryOperatorKind.CX_BO_And || op == CX_BinaryOperatorKind.CX_BO_Or;
+		}
+
+		public static bool IsUnaryOperatorPre(this CX_UnaryOperatorKind type)
+		{
+			switch (type)
+			{
+				case CX_UnaryOperatorKind.CX_UO_PreInc:
+				case CX_UnaryOperatorKind.CX_UO_PreDec:
+				case CX_UnaryOperatorKind.CX_UO_Plus:
+				case CX_UnaryOperatorKind.CX_UO_Minus:
+				case CX_UnaryOperatorKind.CX_UO_Not:
+				case CX_UnaryOperatorKind.CX_UO_LNot:
+				case CX_UnaryOperatorKind.CX_UO_AddrOf:
+				case CX_UnaryOperatorKind.CX_UO_Deref:
+					return true;
+			}
+
+			return false;
+		}
+
+		public static bool IsPrimitiveNumericType(this BaseTypeInfo typeInfo)
+		{
+			var asPrimitive = typeInfo as PrimitiveTypeInfo;
+			return asPrimitive != null && asPrimitive.PrimitiveType != PrimitiveType.Void;
+		}
 	}
 }

@@ -25,7 +25,8 @@ namespace Hebron.Roslyn
 			Result = new RoslynConversionResult();
 		}
 
-		private bool IsClass(string name) => Classes.Contains(name);
+		internal bool IsClass(string name) => Classes.Contains(name);
+		internal bool IsClass(BaseTypeInfo typeInfo) => IsClass(typeInfo.TypeName);
 
 		public RoslynConversionResult Convert()
 		{
