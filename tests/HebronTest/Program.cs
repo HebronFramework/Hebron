@@ -52,6 +52,11 @@ namespace Hebron
                 cls = cls.AddMembers(pair.Value);
             }
 
+            foreach (var pair in result.GlobalVariables)
+            {
+                cls = cls.AddMembers(pair.Value);
+            }
+
             foreach (var pair in result.Functions)
             {
                 cls = cls.AddMembers(pair.Value);

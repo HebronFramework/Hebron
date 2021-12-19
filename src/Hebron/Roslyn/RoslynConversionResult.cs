@@ -8,6 +8,7 @@ namespace Hebron.Roslyn
 		public readonly Dictionary<string, EnumDeclarationSyntax> NamedEnums = new Dictionary<string, EnumDeclarationSyntax>();
 		public readonly Dictionary<string, FieldDeclarationSyntax> UnnamedEnumValues = new Dictionary<string, FieldDeclarationSyntax>();
 		public readonly Dictionary<string, DelegateDeclarationSyntax> Delegates = new Dictionary<string, DelegateDeclarationSyntax>();
+		public readonly Dictionary<string, FieldDeclarationSyntax> GlobalVariables = new Dictionary<string, FieldDeclarationSyntax>();
 		public readonly Dictionary<string, TypeDeclarationSyntax> Structs = new Dictionary<string, TypeDeclarationSyntax>();
 		public readonly Dictionary<string, MethodDeclarationSyntax> Functions = new Dictionary<string, MethodDeclarationSyntax>();
 	}

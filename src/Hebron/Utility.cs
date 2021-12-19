@@ -398,22 +398,6 @@ namespace Hebron
 		public static BaseTypeInfo ToTypeInfo(this CXCursor cursor) => cursor.Type.ToTypeInfo();
 		public static BaseTypeInfo ToTypeInfo(this Cursor cursor) => cursor.Handle.ToTypeInfo();
 
-		public unsafe static string[] Tokenize(this Cursor cursor, TranslationUnit translationUnit)
-		{
-			CXToken* tokens = null;
-			uint numTokens;
-			clang.tokenize(translationUnit.Handle, cursor.Extent, &tokens, &numTokens);
-
-			var result = new List<string>();
-			for (uint i = 0; i < numTokens; ++i)
-			{
-				var name = clang.getTokenSpelling(translationUnit.Handle, tokens[i]).ToString();
-				result.Add(name);
-			}
-
-			return result.ToArray();
-		}
-
 		public static bool IsLogicalBooleanOperator(this CX_BinaryOperatorKind op)
 		{
 			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||

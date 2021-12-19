@@ -32,6 +32,7 @@ namespace Hebron.Roslyn
 		{
 			ConvertEnums();
 			ConvertStructs();
+			ConvertGlobalVariables();
 			ConvertFunctions();
 
 			return Result;
@@ -43,7 +44,7 @@ namespace Hebron.Roslyn
 			return converter.Convert();
 		}
 
-		public string ToRoslynTypeName(BaseTypeInfo type)
+		public string ToRoslynTypeName(BaseTypeInfo type, bool asDelegateName = false)
 		{
 			var asPrimitiveType = type as PrimitiveTypeInfo;
 			if (asPrimitiveType != null)
@@ -84,6 +85,11 @@ namespace Hebron.Roslyn
 			}
 
 			var asFunctionPointerType = (FunctionPointerTypeInfo)type;
+			if (!asDelegateName)
+			{
+				return asFunctionPointerType.TypeName;
+			}
+
 			var key = asFunctionPointerType.TypeString;
 			DelegateDeclarationSyntax decl;
 			if (!DelegateMap.TryGetValue(key, out decl))
@@ -109,17 +115,23 @@ namespace Hebron.Roslyn
 			return decl.Identifier.Text;
 		}
 
-		public string ToRoslynTypeName(CXType type) => ToRoslynTypeName(type.ToTypeInfo());
-		public string ToRoslynTypeName(Type type) => ToRoslynTypeName(type.Handle);
+		public string ToRoslynTypeName(CXType type, bool asDelegateName = false) => ToRoslynTypeName(type.ToTypeInfo(), asDelegateName);
+		public string ToRoslynTypeName(Type type, bool asDelegateName = false) => ToRoslynTypeName(type.Handle, asDelegateName);
 
-		public string ToRoslynString(BaseTypeInfo type)
+		public string ToRoslynString(BaseTypeInfo type, bool asDelegateName = false, bool treatArrayAsPointer = true)
 		{
-			var typeName = ToRoslynTypeName(type);
+			var typeName = ToRoslynTypeName(type, asDelegateName);
 
 			var asStruct = type as StructTypeInfo;
 			if (asStruct != null && Classes.Contains(typeName))
 			{
 				return typeName;
+			}
+
+			if ((type is PrimitiveTypeInfo || asStruct != null) && 
+				type.IsArray && !treatArrayAsPointer)
+			{
+				return "Array" + type.ConstantArraySizes.Length + "D<" + typeName + ">";
 			}
 
 			var asFunctionPointerType = type as FunctionPointerTypeInfo;
@@ -139,18 +151,7 @@ namespace Hebron.Roslyn
 			return sb.ToString();
 		}
 
-		public string ToRoslynString(CXType type) => ToRoslynString(type.ToTypeInfo());
-		public string ToRoslynString(Type type) => ToRoslynString(type.Handle);
-
-		public VariableDeclarationSyntax VariableDeclaration2(Type type, string name, EqualsValueClauseSyntax initializer = null)
-		{
-			var vd = VariableDeclarator(name);
-			if (initializer != null)
-			{
-				vd = vd.WithInitializer(initializer);
-			}
-
-			return VariableDeclaration(ParseTypeName(ToRoslynString(type))).AddVariables(vd);
-		}
+		public string ToRoslynString(CXType type, bool asDelegateName = false, bool treatArrayAsPointer = true) => ToRoslynString(type.ToTypeInfo(), asDelegateName);
+		public string ToRoslynString(Type type, bool asDelegateName = false, bool treatArrayAsPointer = true) => ToRoslynString(type.Handle, asDelegateName);
 	}
 }

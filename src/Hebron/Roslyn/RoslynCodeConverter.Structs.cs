@@ -69,8 +69,7 @@ namespace Hebron.Roslyn
 							typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
 						}
 
-						var roslynString = ToRoslynTypeName(typeInfo);
-						var arrayTypeName = "Array" + typeInfo.ConstantArraySizes.Length + "D<" + roslynString + ">";
+						var arrayTypeName = ToRoslynString(typeInfo, treatArrayAsPointer: false);
 
 						var sb = new StringBuilder();
 						for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
@@ -90,8 +89,10 @@ namespace Hebron.Roslyn
 				}
 				else
 				{
-					var variableDecl = VariableDeclaration2(asField.Type, childName);
-					fieldDecl = FieldDeclaration(variableDecl);
+					var vd = VariableDeclarator(childName);
+					var variableDecl = VariableDeclaration(ParseTypeName(ToRoslynString(asField.Type, true))).AddVariables(vd);
+
+					fieldDecl = FieldDeclaration(variableDecl).MakePublic();
 				}
 
 				typeDecl = typeDecl.AddMembers(fieldDecl);
@@ -103,6 +104,8 @@ namespace Hebron.Roslyn
 		public void ConvertStructs()
 		{
 			Logger.Info("Processing structs...");
+
+			_state = State.Structs;
 
 			// First run - build structs dependency tree and mark structs with function pointers as classes
 			var dependencyTree = new Dictionary<string, List<string>>();

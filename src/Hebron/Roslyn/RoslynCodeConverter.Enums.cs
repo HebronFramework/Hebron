@@ -13,6 +13,7 @@ namespace Hebron.Roslyn
 		{
 			Logger.Info("Processing enums...");
 
+			_state = State.Enums;
 			foreach (var cursor in TranslationUnit.EnumerateCursors())
 			{
 				if (cursor.CursorKind != ClangSharp.Interop.CXCursorKind.CXCursor_EnumDecl)
