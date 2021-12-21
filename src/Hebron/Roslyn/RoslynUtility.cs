@@ -206,5 +206,31 @@ namespace Hebron.Roslyn
 
 			return expr;
 		}
+
+		private static readonly HashSet<string> NativeFunctions = new HashSet<string>
+		{
+			"malloc",
+			"free",
+			"abs",
+			"strcmp",
+			"strtol",
+			"strncmp",
+			"memset",
+			"realloc",
+			"pow",
+			"memcpy",
+			"_lrotl",
+		};
+
+		public static string UpdateNativeCall(this string functionName)
+		{
+			if (NativeFunctions.Contains(functionName))
+			{
+				return "CRuntime." + functionName;
+			}
+
+			return functionName;
+		}
+
 	}
 }

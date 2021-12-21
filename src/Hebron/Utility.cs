@@ -2,6 +2,7 @@
 using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using Type = ClangSharp.Type;
 
@@ -243,7 +244,7 @@ namespace Hebron
 				case CXCursorKind.CXCursor_IntegerLiteral:
 					return clangsharp.Cursor_getIntegerLiteralValue(cursor).ToString();
 				case CXCursorKind.CXCursor_FloatingLiteral:
-					return clangsharp.Cursor_getFloatingLiteralValueAsApproximateDouble(cursor).ToString();
+					return cursor.GetTokenLiteral();
 				case CXCursorKind.CXCursor_CharacterLiteral:
 					return clangsharp.Cursor_getCharacterLiteralValue(cursor).ToString();
 				case CXCursorKind.CXCursor_StringLiteral:
@@ -456,6 +457,45 @@ namespace Hebron
 		{
 			var asPrimitive = typeInfo as PrimitiveTypeInfo;
 			return asPrimitive != null && asPrimitive.PrimitiveType != PrimitiveType.Void;
+		}
+
+		public static string GetTokenLiteral(this CXCursor cursor)
+		{
+			var tokens = cursor.TranslationUnit.Tokenize(cursor.SourceRange);
+
+			Debug.Assert(tokens.Length == 1);
+			Debug.Assert(tokens[0].Kind == CXTokenKind.CXToken_Literal);
+
+			var spelling = tokens[0].GetSpelling(cursor.TranslationUnit).ToString();
+			spelling = spelling.Trim('\\', '\r', '\n');
+			return spelling;
+		}
+
+		public static string[] Tokenize(this CXCursor cursor)
+		{
+			var tokens = cursor.TranslationUnit.Tokenize(cursor.SourceRange);
+
+			var result = new List<string>();
+			foreach (var token in tokens)
+			{
+				var spelling = token.GetSpelling(cursor.TranslationUnit).ToString();
+				spelling = spelling.Trim('\\', '\r', '\n');
+				result.Add(spelling);
+			}
+			return result.ToArray();
+		}
+
+		public static string[] Tokenize(this Cursor cursor) => cursor.Handle.Tokenize();
+
+
+		public static string UppercaseFirstLetter(this string s)
+		{
+			if (string.IsNullOrEmpty(s) || char.IsUpper(s[0]))
+			{
+				return s;
+			}
+
+			return char.ToUpper(s[0]) + s.Substring(1);
 		}
 	}
 }

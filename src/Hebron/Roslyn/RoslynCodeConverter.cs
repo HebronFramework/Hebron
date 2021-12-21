@@ -13,6 +13,7 @@ namespace Hebron.Roslyn
 	{
 		private readonly Dictionary<string, DelegateDeclarationSyntax> DelegateMap = new Dictionary<string, DelegateDeclarationSyntax>();
 		private readonly HashSet<string> Classes = new HashSet<string>();
+		private Dictionary<string, Stack<string>> _variables = new Dictionary<string, Stack<string>>();
 
 		public TranslationUnit TranslationUnit { get; }
 		public RoslynConversionParameters Parameters { get; }
@@ -131,7 +132,13 @@ namespace Hebron.Roslyn
 			if ((type is PrimitiveTypeInfo || asStruct != null) && 
 				type.IsArray && !treatArrayAsPointer)
 			{
-				return "Array" + type.ConstantArraySizes.Length + "D<" + typeName + ">";
+				if (type is PrimitiveTypeInfo)
+				{
+					return "UnsafeArray" + type.ConstantArraySizes.Length + "D" + typeName.UppercaseFirstLetter() + "";
+				}
+
+				// Struct
+				return "UnsafeArray" + type.ConstantArraySizes.Length + "D<" + typeName + ">";
 			}
 
 			var asFunctionPointerType = type as FunctionPointerTypeInfo;

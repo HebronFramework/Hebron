@@ -81,6 +81,12 @@ namespace Hebron.Roslyn
 							}
 						}
 
+						if(arrayTypeName.Contains("UnsafeArray1D<"))
+						{
+							sb.Append(", sizeof(" + typeInfo.TypeName + ")");
+						}
+
+
 						var expr = "public " + arrayTypeName + " " + childName +
 							" = new " + arrayTypeName + "(" + sb.ToString() + ");";
 

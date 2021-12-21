@@ -20,7 +20,17 @@ namespace Hebron
                     "STBI_NO_STDIO",
                     "STB_IMAGE_IMPLEMENTATION",
                 },
-                InputPath = @"D:\Projects\StbSharp\stb\stb_image.h"
+                InputPath = @"D:\Projects\StbSharp\stb\stb_image.h",
+                SkipGlobalVariables = new[]
+				{
+                    "stbi__g_failure_reason"
+                },
+                SkipFunctions = new[]
+				{
+                    "stbi__err",
+                    "stbi_failure_reason"
+                },
+                // InputPath = @"D:\Projects\sqlite-amalgamation-3370000\sqlite3.c"
             };
 
 
@@ -30,7 +40,7 @@ namespace Hebron
             var result = RoslynCodeConverter.Convert(parameters);
 
             var cls = ClassDeclaration("StbImage")
-                .AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword), Token(SyntaxKind.UnsafeKeyword));
+                .AddModifiers(Token(SyntaxKind.UnsafeKeyword), Token(SyntaxKind.PartialKeyword));
 
             foreach (var pair in result.NamedEnums)
             {
@@ -72,7 +82,11 @@ namespace Hebron
                 s = sw.ToString();
             }
 
+            s = s.Replace("stbi__jpeg j = (stbi__jpeg)(stbi__malloc((ulong)(sizeof(stbi__jpeg))))",
+                "var j = new stbi__jpeg()");
+
             File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\StbImage.Generated.cs", s);
+//            File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\Sqlite.Generated.cs", s);
         }
     }
 }

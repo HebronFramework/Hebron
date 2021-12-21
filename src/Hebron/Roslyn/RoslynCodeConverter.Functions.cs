@@ -1,6 +1,7 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -43,7 +44,15 @@ namespace Hebron.Roslyn
 				}
 
 				_functionDecl = funcDecl;
-				Logger.Info("Processing function {0}", cursor.Spelling);
+
+				var functionName = cursor.Spelling.FixSpecialWords();
+				Logger.Info("Processing function {0}", functionName);
+
+				if (Parameters.SkipFunctions.Contains(functionName))
+				{
+					Logger.Info("Skipped.");
+					continue;
+				}
 
 				var md = MethodDeclaration(ParseTypeName(ToRoslynString(funcDecl.ReturnType)), cursor.Spelling)
 					.MakePublic()
@@ -51,7 +60,10 @@ namespace Hebron.Roslyn
 
 				foreach(var p in funcDecl.Parameters)
 				{
-					md = md.AddParameterListParameters(Parameter(Identifier(p.Name)).WithType(ParseTypeName(ToRoslynString(p.Type))));
+					var name = p.Name.FixSpecialWords();
+					var csType = ToRoslynString(p.Type);
+					PushVariableInfo(name, csType);
+					md = md.AddParameterListParameters(Parameter(Identifier(name)).WithType(ParseTypeName(csType)));
 				}
 
 				foreach(var child in funcDecl.Body.Children)
@@ -69,6 +81,12 @@ namespace Hebron.Roslyn
 				md = md.AddBodyStatements();
 
 				Result.Functions[cursor.Spelling] = md;
+
+				foreach (var p in funcDecl.Parameters)
+				{
+					var name = p.Name.FixSpecialWords();
+					PopVariableInfo(name);
+				}
 			}
 		}
 
@@ -78,7 +96,9 @@ namespace Hebron.Roslyn
 			var name = info.Spelling.FixSpecialWords();
 
 			var tt = info.Type.ToTypeInfo();
-			var type = ToRoslynString(tt, treatArrayAsPointer: _state == State.Functions);
+
+			var type = ToRoslynString(tt, 
+				treatArrayAsPointer: _state == State.Functions && tt.ConstantArraySizes.Length == 1);
 			var typeName = ToRoslynTypeName(tt);
 
 			if (tt is StructTypeInfo)
@@ -93,26 +113,45 @@ namespace Hebron.Roslyn
 			{
 				var rvalue = ProcessChildByIndex(info, size - 1);
 
-				switch(rvalue.Info.CursorKind)
+				var expr = rvalue.Expression;
+				if (AppendBoolToInt(rvalue.Info, ref expr))
 				{
-					case CXCursorKind.CXCursor_BinaryOperator:
-						var op = clangsharp.Cursor_getBinaryOpcode(rvalue.Info.Handle);
-						if (op.IsLogicalBooleanOperator())
+					right = expr;
+				}
+				else if (rvalue.Info.CursorKind == CXCursorKind.CXCursor_InitListExpr)
+				{
+					if (_state != State.Functions)
+					{
+						right = "new " + type + "(new " + typeName + "[]" + rvalue.Expression + ");";
+					}
+					else
+					{
+						right = "stackalloc " + typeName + "[]" + rvalue.Expression + ";";
+					}
+				}
+				else if (type.Contains("UnsafeArray"))
+				{
+					// Unsafe array initializer
+					var sb = new StringBuilder();
+					for (var i = 0; i < tt.ConstantArraySizes.Length; ++i)
+					{
+						sb.Append(tt.ConstantArraySizes[i]);
+						if (i < tt.ConstantArraySizes.Length - 1)
 						{
-							right = rvalue.Expression + "?1:0";
+							sb.Append(",");
 						}
-						break;
+					}
 
-					case CXCursorKind.CXCursor_InitListExpr:
-						if (_state != State.Functions)
-						{
-							right = "new " + type + "(new " + typeName + "[]" + rvalue.Expression + ");";
-						}
-						else
-						{
-							right = "stackalloc " + typeName + "[]" + rvalue.Expression + ";";
-						}
-						break;
+					if (type.Contains("UnsafeArray1D<"))
+					{
+						sb.Append(", sizeof(" + tt.TypeName + ")");
+					}
+
+					right = "new " + type + "(" + sb.ToString() + "); ";
+				}
+				else
+				{
+					right = rvalue.Expression;
 				}
 			}
 
@@ -129,7 +168,7 @@ namespace Hebron.Roslyn
 			_currentStructInfo = null;
 		}
 
-		internal void AppendGZ(CursorProcessResult crp)
+		internal void AppendNonZeroCheck(CursorProcessResult crp)
 		{
 			var info = crp.Info;
 
@@ -145,13 +184,14 @@ namespace Hebron.Roslyn
 			if (info.CursorKind == CXCursorKind.CXCursor_ParenExpr)
 			{
 				var child2 = ProcessChildByIndex(info, 0);
-				if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-					clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsBinaryOperator())
+				if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 				{
-					var sub = ProcessChildByIndex(crp.Info, 0);
-					crp.Expression = sub.Expression.Parentize() + "!= 0";
+					var type = clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle);
+					if (!type.IsBinaryOperator())
+					{
+						return;
+					}
 				}
-				return;
 			}
 
 			if (info.CursorKind == CXCursorKind.CXCursor_UnaryOperator)
@@ -190,7 +230,7 @@ namespace Hebron.Roslyn
 				}
 			}
 
-			if (crp.TypeInfo is PrimitiveTypeInfo)
+			if (crp.TypeInfo is PrimitiveTypeInfo && !crp.IsPointer)
 			{
 				crp.Expression = crp.Expression.Parentize() + " != 0";
 			}
@@ -216,6 +256,29 @@ namespace Hebron.Roslyn
 			return Process(cursor.CursorChildren[index]);
 		}
 
+		private bool AppendBoolToInt(Cursor info, ref string expression)
+		{
+			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
+				clangsharp.Cursor_getBinaryOpcode(info.Handle).IsLogicalBooleanOperator())
+			{
+				expression = "(" + expression + "?1:0)";
+				return true;
+			}
+			else if (info.CursorKind == CXCursorKind.CXCursor_ParenExpr)
+			{
+				var child2 = ProcessPossibleChildByIndex(info, 0);
+				if (child2 != null &&
+					child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
+					clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsLogicalBooleanOperator())
+				{
+					expression = "(" + expression + "?1:0)";
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		private string InternalProcess(Cursor info)
 		{
 			switch (info.Handle.Kind)
@@ -232,19 +295,19 @@ namespace Hebron.Roslyn
 						var opCode = clangsharp.Cursor_getUnaryOpcode(info.Handle);
 						var expr = ProcessPossibleChildByIndex(info, 0);
 
-						if ((int)opCode == 99999 && expr != null)
+						if (opCode == CX_UnaryOperatorKind.CX_UO_Invalid && expr != null)
 						{
+							var tokens = info.Tokenize();
 							var op = "sizeof";
-/*							if (tokens.Length > 0 && tokens[0] == "__alignof")
+							if (tokens.Length > 0 && tokens[0] == "__alignof")
 							{
 								// 4 is default alignment
 								return "4";
-							}*/
+							}
 
-							if (!string.IsNullOrEmpty(expr.Expression))
+							if (op == "sizeof" && !string.IsNullOrEmpty(expr.Expression))
 							{
-								// sizeof
-								return op + "(" + expr.Expression + ")";
+								return expr.Expression + ".SizeOf()";
 							}
 
 							if (expr.Info.CursorKind == CXCursorKind.CXCursor_TypeRef)
@@ -268,8 +331,8 @@ namespace Hebron.Roslyn
 
 						if (type.IsLogicalBinaryOperator())
 						{
-							AppendGZ(a);
-							AppendGZ(b);
+							AppendNonZeroCheck(a);
+							AppendNonZeroCheck(b);
 						}
 
 						if (type.IsLogicalBooleanOperator())
@@ -295,10 +358,10 @@ namespace Hebron.Roslyn
 									}
 								}
 
-								if (b.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(b.Info.Handle).IsLogicalBooleanOperator())
+								var expr = b.Expression;
+								if (AppendBoolToInt(b.Info, ref expr))
 								{
-									b.Expression = "(" + b.Expression + "?1:0)";
+									b.Expression = expr;
 								}
 								else
 								{
@@ -361,7 +424,7 @@ namespace Hebron.Roslyn
 						var size = info.CursorChildren.Count;
 
 						var functionExpr = ProcessChildByIndex(info, 0);
-						var functionName = functionExpr.Expression.Deparentize();
+						var functionName = functionExpr.Expression.Deparentize().UpdateNativeCall();
 
 						// Retrieve arguments
 						var args = new List<string>();
@@ -369,7 +432,12 @@ namespace Hebron.Roslyn
 						{
 							var argExpr = ProcessChildByIndex(info, i);
 
-							if (!argExpr.IsPointer)
+							var expr = argExpr.Expression;
+							if (AppendBoolToInt(argExpr.Info, ref expr))
+							{
+								argExpr.Expression = expr;
+							}
+							else if (!argExpr.IsPointer)
 							{
 								argExpr.Expression = argExpr.Expression.ApplyCast(argExpr.CsType);
 							}
@@ -401,11 +469,7 @@ namespace Hebron.Roslyn
 						{
 							if (!tt.IsPointer)
 							{
-								if (child != null && child.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(child.Info.Handle).IsLogicalBooleanOperator())
-								{
-									ret = "(" + ret + "?1:0)";
-								}
+								AppendBoolToInt(child.Info, ref ret);
 
 								return "return " + ret.ApplyCast(ToRoslynString(tt));
 							}
@@ -422,8 +486,13 @@ namespace Hebron.Roslyn
 					}
 				case CXCursorKind.CXCursor_IfStmt:
 					{
+						if (_functionDecl.Spelling == "stbi_load_gif_from_memory")
+						{
+							var k = 5;
+						}
+
 						var conditionExpr = ProcessChildByIndex(info, 0);
-						AppendGZ(conditionExpr);
+						AppendNonZeroCheck(conditionExpr);
 
 						var executionExpr = ProcessChildByIndex(info, 1);
 						var elseExpr = ProcessPossibleChildByIndex(info, 2);
@@ -520,7 +589,7 @@ namespace Hebron.Roslyn
 					{
 						var execution = ProcessChildByIndex(info, 0);
 						var expr = ProcessChildByIndex(info, 1);
-						AppendGZ(expr);
+						AppendNonZeroCheck(expr);
 
 						return "do " + execution.Expression.EnsureStatementFinished() + " while (" + expr.Expression + ")";
 					}
@@ -528,7 +597,7 @@ namespace Hebron.Roslyn
 				case CXCursorKind.CXCursor_WhileStmt:
 					{
 						var expr = ProcessChildByIndex(info, 0);
-						AppendGZ(expr);
+						AppendNonZeroCheck(expr);
 						var execution = ProcessChildByIndex(info, 1);
 
 						return "while (" + expr.Expression + ") " + execution.Expression.EnsureStatementFinished().Curlize();
@@ -738,17 +807,12 @@ namespace Hebron.Roslyn
 					{
 						var expr = ProcessPossibleChildByIndex(info, 0);
 						var e = expr.GetExpression();
-
 						var tt = info.ToTypeInfo();
 						var csType = ToRoslynString(tt);
 
 						if (csType != expr.CsType)
 						{
 							e = e.ApplyCast(csType);
-						}
-						else
-						{
-							e = e.Parentize();
 						}
 
 						return e;
@@ -768,14 +832,13 @@ namespace Hebron.Roslyn
 						var tt = info.ToTypeInfo();
 						var csType = ToRoslynString(tt);
 
-						if (csType != child.CsType)
+						if (expr == "0" && tt.IsPointer)
 						{
+							// null
+						} else if (csType != child.CsType)
+						{
+							// cast
 							expr = expr.ApplyCast(csType);
-						}
-
-						if (expr.Deparentize() == "0")
-						{
-							expr = "null";
 						}
 
 						return expr;
