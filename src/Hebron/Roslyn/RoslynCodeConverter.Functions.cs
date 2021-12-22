@@ -29,7 +29,6 @@ namespace Hebron.Roslyn
 		private State _state = State.Functions;
 		private FunctionDecl _functionDecl;
 
-
 		public void ConvertFunctions()
 		{
 			Logger.Info("Processing functions...");
@@ -728,6 +727,7 @@ namespace Hebron.Roslyn
 						{
 							expr += " = " + right;
 						}
+
 						return expr;
 					}
 
