@@ -97,8 +97,7 @@ namespace Hebron.Roslyn
 
 			var tt = info.Type.ToTypeInfo();
 
-			var type = ToRoslynString(tt, 
-				treatArrayAsPointer: _state == State.Functions && tt.ConstantArraySizes.Length == 1);
+			var type = ToRoslynString(tt, true);
 			var typeName = ToRoslynTypeName(tt);
 
 			if (tt is StructTypeInfo)
@@ -120,13 +119,34 @@ namespace Hebron.Roslyn
 				}
 				else if (rvalue.Info.CursorKind == CXCursorKind.CXCursor_InitListExpr)
 				{
+					var initListExpr = rvalue.Expression;
+					if (rvalue.Info.CursorChildren.Count == 1 &&
+						tt.ConstantArraySizes[0] > 1)
+					{
+						var sb = new StringBuilder();
+						sb.Append("{");
+
+						var element = rvalue.Expression.Decurlize();
+						for (var i = 0; i < tt.ConstantArraySizes[0]; ++i)
+						{
+							sb.Append(element);
+							if (i < tt.ConstantArraySizes[0] - 1)
+							{
+								sb.Append(", ");
+							}
+						}
+						sb.Append("}");
+
+						initListExpr = sb.ToString();
+					}
+
 					if (_state != State.Functions)
 					{
-						right = "new " + type + "(new " + typeName + "[]" + rvalue.Expression + ");";
+						right = "new " + type + "(new " + typeName + "[]" + initListExpr + ");";
 					}
 					else
 					{
-						right = "stackalloc " + typeName + "[]" + rvalue.Expression + ";";
+						right = "stackalloc " + typeName + "[]" + initListExpr + ";";
 					}
 				}
 				else if (type.Contains("UnsafeArray"))

@@ -21,6 +21,7 @@ namespace Hebron
                     "STB_IMAGE_IMPLEMENTATION",
                 },
                 InputPath = @"D:\Projects\StbSharp\stb\stb_image.h",
+                // InputPath = @"D:\Projects\sqlite-amalgamation-3370000\sqlite3.c"
                 SkipGlobalVariables = new[]
 				{
                     "stbi__g_failure_reason"
@@ -30,7 +31,6 @@ namespace Hebron
                     "stbi__err",
                     "stbi_failure_reason"
                 },
-                // InputPath = @"D:\Projects\sqlite-amalgamation-3370000\sqlite3.c"
             };
 
 

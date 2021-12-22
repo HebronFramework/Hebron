@@ -231,6 +231,5 @@ namespace Hebron.Roslyn
 
 			return functionName;
 		}
-
 	}
 }

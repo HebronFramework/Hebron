@@ -55,7 +55,6 @@ namespace Hebron.Roslyn
 
 				try
 				{
-
 					var res = Process(cursor);
 
 					_variables[name] = new Stack<string>();

@@ -45,7 +45,7 @@ namespace Hebron.Roslyn
 			return converter.Convert();
 		}
 
-		public string ToRoslynTypeName(BaseTypeInfo type, bool asDelegateName = false)
+		public string ToRoslynTypeName(BaseTypeInfo type, bool declareMissingTypes = false)
 		{
 			var asPrimitiveType = type as PrimitiveTypeInfo;
 			if (asPrimitiveType != null)
@@ -86,7 +86,7 @@ namespace Hebron.Roslyn
 			}
 
 			var asFunctionPointerType = (FunctionPointerTypeInfo)type;
-			if (!asDelegateName)
+			if (!declareMissingTypes)
 			{
 				return asFunctionPointerType.TypeName;
 			}
@@ -116,29 +116,29 @@ namespace Hebron.Roslyn
 			return decl.Identifier.Text;
 		}
 
-		public string ToRoslynTypeName(CXType type, bool asDelegateName = false) => ToRoslynTypeName(type.ToTypeInfo(), asDelegateName);
-		public string ToRoslynTypeName(Type type, bool asDelegateName = false) => ToRoslynTypeName(type.Handle, asDelegateName);
+		public string ToRoslynTypeName(CXType type, bool declareMissingTypes = false) => ToRoslynTypeName(type.ToTypeInfo(), declareMissingTypes);
+		public string ToRoslynTypeName(Type type, bool declareMissingTypes = false) => ToRoslynTypeName(type.Handle, declareMissingTypes);
 
-		public string ToRoslynString(BaseTypeInfo type, bool asDelegateName = false, bool treatArrayAsPointer = true)
+		public string ToRoslynString(BaseTypeInfo type, bool declareMissingTypes = false)
 		{
-			var typeName = ToRoslynTypeName(type, asDelegateName);
+			var typeName = ToRoslynTypeName(type, declareMissingTypes);
 
 			var asStruct = type as StructTypeInfo;
-			if (asStruct != null && Classes.Contains(typeName))
+			if (asStruct != null && IsClass(typeName))
 			{
 				return typeName;
 			}
 
-			if ((type is PrimitiveTypeInfo || asStruct != null) && 
-				type.IsArray && !treatArrayAsPointer)
+			if (_state == State.Functions &&
+				type.ConstantArraySizes.Length == 1 &&
+				(type is PrimitiveTypeInfo || (asStruct != null && !IsClass(typeName))))
 			{
-				if (type is PrimitiveTypeInfo)
-				{
-					return "UnsafeArray" + type.ConstantArraySizes.Length + "D" + typeName.UppercaseFirstLetter() + "";
-				}
-
-				// Struct
-				return "UnsafeArray" + type.ConstantArraySizes.Length + "D<" + typeName + ">";
+				// stackalloc
+			} else
+			if ((type is PrimitiveTypeInfo || asStruct != null) &&
+				type.IsArray)
+			{
+				return BuildUnsafeArrayTypeName(type, declareMissingTypes);
 			}
 
 			var asFunctionPointerType = type as FunctionPointerTypeInfo;
@@ -158,7 +158,67 @@ namespace Hebron.Roslyn
 			return sb.ToString();
 		}
 
-		public string ToRoslynString(CXType type, bool asDelegateName = false, bool treatArrayAsPointer = true) => ToRoslynString(type.ToTypeInfo(), asDelegateName);
-		public string ToRoslynString(Type type, bool asDelegateName = false, bool treatArrayAsPointer = true) => ToRoslynString(type.Handle, asDelegateName);
+		public string ToRoslynString(CXType type, bool declareMissingTypes = false) => ToRoslynString(type.ToTypeInfo(), declareMissingTypes);
+		public string ToRoslynString(Type type, bool declareMissingTypes = false) => ToRoslynString(type.Handle, declareMissingTypes);
+
+		public string BuildUnsafeArrayTypeName(BaseTypeInfo typeInfo, 
+			Func<string, bool> isDeclaredChecker,
+			Action<string, TypeDeclarationSyntax> declarationAdder)
+		{
+			var typeName = ToRoslynTypeName(typeInfo);
+			var arrayTypeName = "UnsafeArray" + typeInfo.ConstantArraySizes.Length + "D" + typeName.UppercaseFirstLetter();
+
+			var isDeclared = isDeclaredChecker(arrayTypeName);
+			if (!isDeclared)
+			{
+				string template;
+				switch (typeInfo.ConstantArraySizes.Length)
+				{
+					case 1:
+						template = Resources.UnsafeArray1DTemplate;
+						break;
+					case 2:
+						template = Resources.UnsafeArray2DTemplate;
+						break;
+					default:
+						throw new Exception(string.Format("Arrays with {0} dimensions arent supported.", typeInfo.ConstantArraySizes.Length));
+				}
+
+				var declExpr = template.
+					Replace("$arrayTypeName$", arrayTypeName).
+					Replace("$typeName$", typeName);
+
+				var decl = (TypeDeclarationSyntax)ParseMemberDeclaration(declExpr);
+				declarationAdder(arrayTypeName, decl);
+			}
+
+			return arrayTypeName;
+		}
+
+		public string BuildUnsafeArrayTypeName(BaseTypeInfo typeInfo, bool declareMissingTypes = false) =>
+			BuildUnsafeArrayTypeName(typeInfo,
+			n => declareMissingTypes ? Result.Structs.ContainsKey(n) : true,
+			(n, decl) => Result.Structs[n] = decl);
+
+		public string ToUnsafeArrayDeclaration(BaseTypeInfo typeInfo, string name, 
+			Func<string, bool> isDeclaredChecker, 
+			Action<string, TypeDeclarationSyntax> declarationAdder)
+		{
+			var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo, isDeclaredChecker, declarationAdder);
+
+			var sb = new StringBuilder();
+			for (var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
+			{
+				sb.Append(typeInfo.ConstantArraySizes[i]);
+				if (i < typeInfo.ConstantArraySizes.Length - 1)
+				{
+					sb.Append(",");
+				}
+			}
+
+			var initializer = "new " + arrayTypeName + "(" + sb.ToString() + ")";
+
+			return arrayTypeName + " " + name + " = " + initializer + ";";
+		}
 	}
 }

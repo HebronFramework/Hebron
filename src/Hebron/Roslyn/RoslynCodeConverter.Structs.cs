@@ -1,5 +1,6 @@
 ﻿using ClangSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -33,6 +34,7 @@ namespace Hebron.Roslyn
 		private TypeDeclarationSyntax FillTypeDeclaration(Cursor cursor, string name, TypeDeclarationSyntax typeDecl)
 		{
 			typeDecl = typeDecl.MakePublic();
+			var declaredArrays = new HashSet<string>();
 
 			foreach (NamedDecl child in cursor.CursorChildren)
 			{
@@ -45,58 +47,54 @@ namespace Hebron.Roslyn
 				var childType = asField.Type;
 				var childName = asField.Name.FixSpecialWords();
 				var typeInfo = asField.Type.ToTypeInfo();
+				var isInternalDecl = false;
+
+				if (typeInfo.TypeString.Contains("unnamed "))
+				{
+					// unnamed struct
+					var subName = "unnamed1";
+					var subTypeDecl = (TypeDeclarationSyntax)StructDeclaration(subName);
+					subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl);
+					typeDecl = typeDecl.AddMembers(subTypeDecl);
+
+					typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
+					isInternalDecl = true;
+				}
+
+				var typeName = ToRoslynTypeName(typeInfo);
 
 				FieldDeclarationSyntax fieldDecl = null;
-				if (typeInfo.ConstantArraySizes != null && typeInfo.ConstantArraySizes.Length > 0)
+
+				if (!IsClass(name) && typeInfo is PrimitiveTypeInfo && 
+					typeInfo.ConstantArraySizes.Length == 1)
 				{
-					if (!IsClass(name) && typeInfo is PrimitiveTypeInfo && typeInfo.ConstantArraySizes.Length == 1)
-					{
-						var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
-							childName + "[" + typeInfo.ConstantArraySizes[0] + "];";
+					var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
+						childName + "[" + typeInfo.ConstantArraySizes[0] + "];";
 
-						fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-					}
-					else
-					{
-						if (typeInfo.TypeString.Contains("unnamed "))
+					fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+				}
+				else if (typeInfo.ConstantArraySizes.Length > 0)
+				{
+					var expr = ToUnsafeArrayDeclaration(typeInfo, childName,
+						n => isInternalDecl ? declaredArrays.Contains(n) : Result.Structs.ContainsKey(n),
+						(n, decl) =>
 						{
-							// unnamed struct
-							var subName = "unnamed1";
-							TypeDeclarationSyntax subTypeDecl = StructDeclaration(subName);
-							subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl);
-							typeDecl = typeDecl.AddMembers(subTypeDecl);
-
-							typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
-						}
-
-						var arrayTypeName = ToRoslynString(typeInfo, treatArrayAsPointer: false);
-
-						var sb = new StringBuilder();
-						for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
-						{
-							sb.Append(typeInfo.ConstantArraySizes[i]);
-							if (i < typeInfo.ConstantArraySizes.Length - 1)
+							if (isInternalDecl)
 							{
-								sb.Append(",");
+								typeDecl = typeDecl.AddMembers(decl);
+								declaredArrays.Add(n);
+							} else
+							{
+								Result.Structs[n] = decl;
 							}
-						}
+						});
 
-						if(arrayTypeName.Contains("UnsafeArray1D<"))
-						{
-							sb.Append(", sizeof(" + typeInfo.TypeName + ")");
-						}
-
-
-						var expr = "public " + arrayTypeName + " " + childName +
-							" = new " + arrayTypeName + "(" + sb.ToString() + ");";
-
-						fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-					}
+					fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration("public " + expr);
 				}
 				else
 				{
 					var vd = VariableDeclarator(childName);
-					var variableDecl = VariableDeclaration(ParseTypeName(ToRoslynString(asField.Type, true))).AddVariables(vd);
+					var variableDecl = VariableDeclaration(ParseTypeName(ToRoslynString(typeInfo, true))).AddVariables(vd);
 
 					fieldDecl = FieldDeclaration(variableDecl).MakePublic();
 				}
@@ -200,7 +198,7 @@ namespace Hebron.Roslyn
 				Logger.Info("Generating code for struct {0}", name);
 
 				TypeDeclarationSyntax typeDecl;
-				if (Classes.Contains(name))
+				if (IsClass(name))
 				{
 					typeDecl = ClassDeclaration(name);
 				}
@@ -210,6 +208,14 @@ namespace Hebron.Roslyn
 				}
 
 				typeDecl = FillTypeDeclaration(cursor, name, typeDecl);
+
+				if (!IsClass(name))
+				{
+
+					// Add SizeOf method
+					var sizeOfMethod = "public int SizeOf() => sizeof(" + name + ");";
+					typeDecl = typeDecl.AddMembers(ParseMemberDeclaration(sizeOfMethod));
+				}
 
 				Result.Structs[name] = typeDecl;
 			}
