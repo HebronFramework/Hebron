@@ -47,7 +47,6 @@ namespace Hebron.Roslyn
 				var childType = asField.Type;
 				var childName = asField.Name.FixSpecialWords();
 				var typeInfo = asField.Type.ToTypeInfo();
-				var isInternalDecl = false;
 
 				if (typeInfo.TypeString.Contains("unnamed "))
 				{
@@ -58,38 +57,20 @@ namespace Hebron.Roslyn
 					typeDecl = typeDecl.AddMembers(subTypeDecl);
 
 					typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
-					isInternalDecl = true;
 				}
 
 				var typeName = ToRoslynTypeName(typeInfo);
 
 				FieldDeclarationSyntax fieldDecl = null;
 
-				if (!IsClass(name) && typeInfo is PrimitiveTypeInfo && 
-					typeInfo.ConstantArraySizes.Length == 1)
+				var isFixedField = !IsClass(name) && typeInfo is PrimitiveTypeInfo &&
+					typeInfo.ConstantArraySizes.Length == 1;
+				if (isFixedField)
 				{
 					var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
 						childName + "[" + typeInfo.ConstantArraySizes[0] + "];";
 
 					fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-				}
-				else if (typeInfo.ConstantArraySizes.Length > 0)
-				{
-					var expr = ToUnsafeArrayDeclaration(typeInfo, childName,
-						n => isInternalDecl ? declaredArrays.Contains(n) : Result.Structs.ContainsKey(n),
-						(n, decl) =>
-						{
-							if (isInternalDecl)
-							{
-								typeDecl = typeDecl.AddMembers(decl);
-								declaredArrays.Add(n);
-							} else
-							{
-								Result.Structs[n] = decl;
-							}
-						});
-
-					fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration("public " + expr);
 				}
 				else
 				{
@@ -97,6 +78,25 @@ namespace Hebron.Roslyn
 					var variableDecl = VariableDeclaration(ParseTypeName(ToRoslynString(typeInfo, true))).AddVariables(vd);
 
 					fieldDecl = FieldDeclaration(variableDecl).MakePublic();
+				}
+
+				if (typeInfo.ConstantArraySizes.Length > 0 && !isFixedField)
+				{
+					// Declare array field
+					var sb = new StringBuilder();
+					for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
+					{
+						sb.Append(typeInfo.ConstantArraySizes[i]);
+						sb.Append(", ");
+					}
+
+					sb.Append("sizeof(" + typeName + ")");
+
+					var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
+					var expr = "public " + arrayTypeName + " " + childName +
+						"Array = new " + arrayTypeName + "(" + sb.ToString() + ");";
+					var arrayFieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+					typeDecl = typeDecl.AddMembers(arrayFieldDecl);
 				}
 
 				typeDecl = typeDecl.AddMembers(fieldDecl);

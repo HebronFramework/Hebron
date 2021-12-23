@@ -24,10 +24,9 @@ namespace Hebron.Roslyn
 			public Type Type;
 		}
 
-		private List<FieldInfo> _currentStructInfo;
-		private readonly Dictionary<string, List<FieldInfo>> _visitedStructs = new Dictionary<string, List<FieldInfo>>();
 		private State _state = State.Functions;
 		private FunctionDecl _functionDecl;
+		private List<FieldInfo> _currentStructInfo;
 
 		public void ConvertFunctions()
 		{
@@ -89,20 +88,16 @@ namespace Hebron.Roslyn
 			}
 		}
 
-		private void ProcessDeclaration(VarDecl info, out string left, out string right)
+		private string ProcessDeclaration(VarDecl info)
 		{
+			string left, right;
 			var size = info.CursorChildren.Count;
 			var name = info.Spelling.FixSpecialWords();
 
-			var tt = info.Type.ToTypeInfo();
+			var typeInfo = info.Type.ToTypeInfo();
 
-			var type = ToRoslynString(tt, true);
-			var typeName = ToRoslynTypeName(tt);
-
-			if (tt is StructTypeInfo)
-			{
-				_visitedStructs.TryGetValue(tt.TypeName, out _currentStructInfo);
-			}
+			var type = ToRoslynString(typeInfo, true);
+			var typeName = ToRoslynTypeName(typeInfo);
 
 			left = type + " " + name;
 			right = string.Empty;
@@ -120,16 +115,16 @@ namespace Hebron.Roslyn
 				{
 					var initListExpr = rvalue.Expression;
 					if (rvalue.Info.CursorChildren.Count == 1 &&
-						tt.ConstantArraySizes[0] > 1)
+						typeInfo.ConstantArraySizes[0] > 1)
 					{
 						var sb = new StringBuilder();
 						sb.Append("{");
 
 						var element = rvalue.Expression.Decurlize();
-						for (var i = 0; i < tt.ConstantArraySizes[0]; ++i)
+						for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
 						{
 							sb.Append(element);
-							if (i < tt.ConstantArraySizes[0] - 1)
+							if (i < typeInfo.ConstantArraySizes[0] - 1)
 							{
 								sb.Append(", ");
 							}
@@ -141,32 +136,45 @@ namespace Hebron.Roslyn
 
 					if (_state != State.Functions)
 					{
-						right = "new " + type + "(new " + typeName + "[]" + initListExpr + ");";
+						// Declare array field
+						var arrayVariableName = name + "Array";
+						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
+						var arrayExpr = arrayTypeName + " " + arrayVariableName +
+							" = new " + arrayTypeName + 
+							"(new " + typeName + "[] " + initListExpr + ", sizeof(" + typeName + "));";
+
+						left = arrayExpr + left;
+						right = "(" + typeName + "*)" + arrayVariableName;
 					}
 					else
 					{
 						right = "stackalloc " + typeName + "[]" + initListExpr + ";";
 					}
 				}
-				else if (type.Contains("UnsafeArray"))
+				else if (typeInfo.ConstantArraySizes.Length == 1 && !IsClass(typeName))
 				{
-					// Unsafe array initializer
+					right = "stackalloc " + typeName + "[" + typeInfo.ConstantArraySizes[0] + "];";
+				}
+				else if(typeInfo.ConstantArraySizes.Length > 0)
+				{
 					var sb = new StringBuilder();
-					for (var i = 0; i < tt.ConstantArraySizes.Length; ++i)
+					for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
 					{
-						sb.Append(tt.ConstantArraySizes[i]);
-						if (i < tt.ConstantArraySizes.Length - 1)
+						sb.Append(typeInfo.ConstantArraySizes[i]);
+						if (i < typeInfo.ConstantArraySizes.Length - 1)
 						{
-							sb.Append(",");
+							sb.Append(", ");
 						}
 					}
 
-					if (type.Contains("UnsafeArray1D<"))
-					{
-						sb.Append(", sizeof(" + tt.TypeName + ")");
-					}
+					var arrayVariableName = name + "Array";
+					var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
 
-					right = "new " + type + "(" + sb.ToString() + "); ";
+					var arrayExpr = arrayTypeName + " " + arrayVariableName +
+						" = new " + arrayTypeName + "(" + sb.ToString() + ", sizeof(" + typeName + "));";
+
+					left = arrayExpr + left;
+					right = "(" + type + ")" + arrayVariableName;
 				}
 				else
 				{
@@ -174,17 +182,25 @@ namespace Hebron.Roslyn
 				}
 			}
 
-			if (string.IsNullOrEmpty(right) && tt is StructTypeInfo)
+			if (string.IsNullOrEmpty(right) && typeInfo is StructTypeInfo)
 			{
 				right = "new " + type + "()";
 			}
 
-			if (string.IsNullOrEmpty(right) && !tt.IsPointer)
+			if (string.IsNullOrEmpty(right) && !typeInfo.IsPointer)
 			{
 				right = "0";
 			}
 
 			_currentStructInfo = null;
+
+			var result = left;
+			if (!string.IsNullOrEmpty(right))
+			{
+				result += " = " + right;
+			}
+
+			return result;
 		}
 
 		internal void AppendNonZeroCheck(CursorProcessResult crp)
@@ -326,7 +342,7 @@ namespace Hebron.Roslyn
 
 							if (op == "sizeof" && !string.IsNullOrEmpty(expr.Expression))
 							{
-								return expr.Expression + ".SizeOf()";
+								return "SizeOfUtility.SizeOf(" + expr.Expression + ")";
 							}
 
 							if (expr.Info.CursorKind == CXCursorKind.CXCursor_TypeRef)
@@ -719,17 +735,7 @@ namespace Hebron.Roslyn
 				case CXCursorKind.CXCursor_StringLiteral:
 					return info.Spelling.StartsWith("L") ? info.Spelling.Substring(1) : info.Spelling;
 				case CXCursorKind.CXCursor_VarDecl:
-					{
-						string left, right;
-						ProcessDeclaration((VarDecl)info, out left, out right);
-						var expr = left;
-						if (!string.IsNullOrEmpty(right))
-						{
-							expr += " = " + right;
-						}
-
-						return expr;
-					}
+					return ProcessDeclaration((VarDecl)info);
 
 				case CXCursorKind.CXCursor_DeclStmt:
 					{

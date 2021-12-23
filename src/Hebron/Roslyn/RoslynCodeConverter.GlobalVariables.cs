@@ -60,10 +60,30 @@ namespace Hebron.Roslyn
 					_variables[name] = new Stack<string>();
 					_variables[name].Push(res.CsType);
 
-					var expr = ("public static " + res.Expression).EnsureStatementEndWithSemicolon();
+					var parts = res.Expression.Split(';');
+					foreach (var part in parts)
+					{
+						if (string.IsNullOrEmpty(part))
+						{
+							continue;
+						}
 
-					var stmt = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-					Result.GlobalVariables[varDecl.Spelling] = stmt;
+						var parts2 = part.Split('=')[0].Split(' ');
+
+						var varName = string.Empty;
+						for(var i = parts2.Length - 1; i >= 0; --i)
+						{
+							varName = parts2[i];
+							if (!string.IsNullOrEmpty(varName))
+							{
+								break;
+							}
+						}
+						
+						var expr = ("public static " + part).EnsureStatementEndWithSemicolon();
+						var stmt = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+						Result.GlobalVariables[varName] = stmt;
+					}
 				}
 				catch(Exception)
 				{
