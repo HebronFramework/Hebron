@@ -330,9 +330,10 @@ namespace Hebron.Roslyn
 						var opCode = clangsharp.Cursor_getUnaryOpcode(info.Handle);
 						var expr = ProcessPossibleChildByIndex(info, 0);
 
+						string[] tokens = null;
 						if (opCode == CX_UnaryOperatorKind.CX_UO_Invalid && expr != null)
 						{
-							var tokens = info.Tokenize();
+							tokens = info.Tokenize();
 							var op = "sizeof";
 							if (tokens.Length > 0 && tokens[0] == "__alignof")
 							{
@@ -351,7 +352,12 @@ namespace Hebron.Roslyn
 							}
 						}
 
-						return string.Empty;
+						if (tokens == null)
+						{
+							tokens = info.Tokenize();
+						}
+
+						return string.Join(string.Empty, tokens);
 					}
 				case CXCursorKind.CXCursor_DeclRefExpr:
 					{
@@ -596,7 +602,12 @@ namespace Hebron.Roslyn
 						var executionExpr = ReplaceCommas(execution);
 						executionExpr = executionExpr.EnsureStatementFinished();
 
-						return "for (" + start.GetExpression().EnsureStatementEndWithSemicolon() + condition.GetExpression().EnsureStatementEndWithSemicolon() + it.GetExpression() + ") " +
+						var sci = start.GetExpression().EnsureStatementEndWithSemicolon() + condition.GetExpression().EnsureStatementEndWithSemicolon() + it.GetExpression();
+						if (string.IsNullOrEmpty(sci))
+						{
+							sci = ";;";
+						}
+						return "for (" + sci + ") " +
 								executionExpr.Curlize();
 					}
 
@@ -723,13 +734,13 @@ namespace Hebron.Roslyn
 					}
 				case CXCursorKind.CXCursor_CharacterLiteral:
 					{
-
 						var r = info.GetLiteralString();
 						if (string.IsNullOrEmpty(r))
 						{
-							r = @"\0";
+							return @"0";
 						}
-						return "'" + r + "'";
+
+						return r.ToString();
 					}
 
 				case CXCursorKind.CXCursor_StringLiteral:
@@ -880,10 +891,10 @@ namespace Hebron.Roslyn
 							return string.Empty;
 						}
 
-						var expr = ProcessPossibleChildByIndex(info, size - 1);
+						var expr = ProcessChildByIndex(info, size - 1);
 
-						var tt = info.ToTypeInfo();
-						if (tt.IsPointer && expr.Expression.Deparentize() == "0")
+						var typeInfo = info.ToTypeInfo();
+						if (typeInfo.IsPointer && expr.Expression.Deparentize() == "0")
 						{
 							expr.Expression = "null";
 						}

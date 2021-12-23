@@ -3,6 +3,7 @@ using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using Type = ClangSharp.Type;
 
@@ -242,7 +243,7 @@ namespace Hebron
 			switch (cursor.Kind)
 			{
 				case CXCursorKind.CXCursor_IntegerLiteral:
-					return clangsharp.Cursor_getIntegerLiteralValue(cursor).ToString();
+					return cursor.GetTokenLiteral();
 				case CXCursorKind.CXCursor_FloatingLiteral:
 					return cursor.GetTokenLiteral();
 				case CXCursorKind.CXCursor_CharacterLiteral:
@@ -471,17 +472,20 @@ namespace Hebron
 			return spelling;
 		}
 
-		public static string[] Tokenize(this CXCursor cursor)
+		public unsafe static string[] Tokenize(this CXCursor cursor)
 		{
-			var tokens = cursor.TranslationUnit.Tokenize(cursor.SourceRange);
+			var range = clang.getCursorExtent(cursor);
+			CXToken *nativeTokens;
+			uint numTokens;
+			clang.tokenize(cursor.TranslationUnit, range, &nativeTokens, &numTokens);
 
 			var result = new List<string>();
-			foreach (var token in tokens)
+			for (uint i = 0; i < numTokens; ++i)
 			{
-				var spelling = token.GetSpelling(cursor.TranslationUnit).ToString();
-				spelling = spelling.Trim('\\', '\r', '\n');
-				result.Add(spelling);
+				var name = clang.getTokenSpelling(cursor.TranslationUnit, nativeTokens[i]).ToString();
+				result.Add(name);
 			}
+
 			return result.ToArray();
 		}
 
