@@ -172,7 +172,7 @@ namespace Hebron.Roslyn
 
 			if (string.IsNullOrEmpty(trimmed))
 			{
-				return trimmed;
+				return ";";
 			}
 
 			if (!trimmed.EndsWith(";"))
@@ -220,6 +220,7 @@ namespace Hebron.Roslyn
 			"pow",
 			"memcpy",
 			"_lrotl",
+			"ldexp",
 		};
 
 		public static string UpdateNativeCall(this string functionName)

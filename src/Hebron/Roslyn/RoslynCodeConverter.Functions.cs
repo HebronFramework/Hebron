@@ -1,9 +1,11 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
+using Type = ClangSharp.Type;
 
 namespace Hebron.Roslyn
 {
@@ -144,11 +146,11 @@ namespace Hebron.Roslyn
 							"(new " + typeName + "[] " + initListExpr + ", sizeof(" + typeName + "));";
 
 						left = arrayExpr + left;
-						right = "(" + typeName + "*)" + arrayVariableName;
+						right = "(" + type.Depoint() + "*)" + arrayVariableName;
 					}
 					else
 					{
-						right = "stackalloc " + typeName + "[]" + initListExpr + ";";
+						right = "stackalloc " + type.Depoint() + "[]" + initListExpr + ";";
 					}
 				}
 				else if (typeInfo.ConstantArraySizes.Length == 1 && !IsClass(typeName))
@@ -158,7 +160,7 @@ namespace Hebron.Roslyn
 				else if(typeInfo.ConstantArraySizes.Length > 0)
 				{
 					var sb = new StringBuilder();
-					for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
+					for (var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
 					{
 						sb.Append(typeInfo.ConstantArraySizes[i]);
 						if (i < typeInfo.ConstantArraySizes.Length - 1)
@@ -167,22 +169,44 @@ namespace Hebron.Roslyn
 						}
 					}
 
-					var arrayVariableName = name + "Array";
-					var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
+					if (!IsClass(typeName))
+					{
+						var arrayVariableName = name + "Array";
+						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
 
-					var arrayExpr = arrayTypeName + " " + arrayVariableName +
-						" = new " + arrayTypeName + "(" + sb.ToString() + ", sizeof(" + typeName + "));";
+						var arrayExpr = arrayTypeName + " " + arrayVariableName +
+							" = new " + arrayTypeName + "(" + sb.ToString() + ", sizeof(" + typeName + "));";
 
-					left = arrayExpr + left;
-					right = "(" + type + ")" + arrayVariableName;
+						left = arrayExpr + left;
+						right = "(" + type + ")" + arrayVariableName;
+					} else
+					{
+						left = "var " + name;
+						right = "new " + typeName + "[" + sb.ToString() + "];";
+
+						for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
+						{
+							right += name + "[" + i + "] = new " + typeName + "();";
+						}
+					}
 				}
 				else
 				{
 					right = rvalue.Expression;
 				}
+
+				if (!string.IsNullOrEmpty(right) && !typeInfo.IsPointer)
+				{
+					right = right.ApplyCast(type);
+				}
 			}
 
-			if (string.IsNullOrEmpty(right) && typeInfo is StructTypeInfo)
+			if (typeInfo.IsPointer && right.Deparentize() == "0")
+			{
+				right = "null";
+			}
+
+			if (string.IsNullOrEmpty(right) && typeInfo is StructTypeInfo && !typeInfo.IsPointer)
 			{
 				right = "new " + type + "()";
 			}
@@ -343,7 +367,18 @@ namespace Hebron.Roslyn
 
 							if (op == "sizeof" && !string.IsNullOrEmpty(expr.Expression))
 							{
-								return "SizeOfUtility.SizeOf(" + expr.Expression + ")";
+								if (expr.TypeInfo.ConstantArraySizes.Length > 1)
+								{
+									throw new Exception(string.Format("sizeof for arrays with {0} dimensions isn't supported.", 
+										expr.TypeInfo.ConstantArraySizes.Length));
+								}
+
+								if (expr.TypeInfo.ConstantArraySizes.Length == 1)
+								{
+									return expr.TypeInfo.ConstantArraySizes[0] + " * sizeof(" + ToRoslynTypeName(expr.TypeInfo) + ")";
+								}
+
+								return "sizeof(" + expr.CsType + ")";
 							}
 
 							if (expr.Info.CursorKind == CXCursorKind.CXCursor_TypeRef)
@@ -510,13 +545,16 @@ namespace Hebron.Roslyn
 						{
 							if (!tt.IsPointer)
 							{
-								AppendBoolToInt(child.Info, ref ret);
+								if (AppendBoolToInt(child.Info, ref ret))
+								{
+									return "return " + ret;
+								}
 
 								return "return " + ret.ApplyCast(ToRoslynString(tt));
 							}
 						}
 
-						if (tt.IsPointer && ret == "0")
+						if (tt.IsPointer && ret.Deparentize() == "0")
 						{
 							ret = "null";
 						}
@@ -527,11 +565,6 @@ namespace Hebron.Roslyn
 					}
 				case CXCursorKind.CXCursor_IfStmt:
 					{
-						if (_functionDecl.Spelling == "stbi_load_gif_from_memory")
-						{
-							var k = 5;
-						}
-
 						var conditionExpr = ProcessChildByIndex(info, 0);
 						AppendNonZeroCheck(conditionExpr);
 
@@ -603,10 +636,6 @@ namespace Hebron.Roslyn
 						executionExpr = executionExpr.EnsureStatementFinished();
 
 						var sci = start.GetExpression().EnsureStatementEndWithSemicolon() + condition.GetExpression().EnsureStatementEndWithSemicolon() + it.GetExpression();
-						if (string.IsNullOrEmpty(sci))
-						{
-							sci = ";;";
-						}
 						return "for (" + sci + ") " +
 								executionExpr.Curlize();
 					}
@@ -850,6 +879,9 @@ namespace Hebron.Roslyn
 						if (csType != expr.CsType)
 						{
 							e = e.ApplyCast(csType);
+						} else
+						{
+							e = e.Parentize();
 						}
 
 						return e;

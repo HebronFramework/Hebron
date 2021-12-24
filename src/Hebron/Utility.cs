@@ -3,7 +3,6 @@ using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using Type = ClangSharp.Type;
 
@@ -403,8 +402,9 @@ namespace Hebron
 		public static bool IsLogicalBooleanOperator(this CX_BinaryOperatorKind op)
 		{
 			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||
-				   op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_GE ||
-				   op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT;
+				op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_GE ||
+				op == CX_BinaryOperatorKind.CX_BO_GE || op == CX_BinaryOperatorKind.CX_BO_LE ||
+				op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT;
 		}
 
 		public static bool IsLogicalBinaryOperator(this CX_BinaryOperatorKind op)
@@ -491,7 +491,6 @@ namespace Hebron
 
 		public static string[] Tokenize(this Cursor cursor) => cursor.Handle.Tokenize();
 
-
 		public static string UppercaseFirstLetter(this string s)
 		{
 			if (string.IsNullOrEmpty(s) || char.IsUpper(s[0]))
@@ -500,6 +499,17 @@ namespace Hebron
 			}
 
 			return char.ToUpper(s[0]) + s.Substring(1);
+		}
+
+		public static string Depoint(this string s)
+		{
+			s = s.Trim();
+			if (s.EndsWith("*"))
+			{
+				s = s.Substring(0, s.Length - 1);
+			}
+
+			return s;
 		}
 	}
 }
