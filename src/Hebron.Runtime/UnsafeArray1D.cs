@@ -43,6 +43,11 @@ namespace Hebron.Runtime
 			_pinHandle = GCHandle.Alloc(_data, GCHandleType.Pinned);
 		}
 
+		~UnsafeArray1D()
+		{
+			_pinHandle.Free();
+		}
+
 		public void* ToPointer()
 		{
 			return _pinHandle.AddrOfPinnedObject().ToPointer();

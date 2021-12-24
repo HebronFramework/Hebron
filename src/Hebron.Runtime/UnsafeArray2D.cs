@@ -2,7 +2,6 @@
 
 namespace Hebron.Runtime
 {
-
 	public unsafe class UnsafeArray2D<T> where T : struct
 	{
 		private readonly UnsafeArray1D<T>[] _data;
@@ -29,6 +28,11 @@ namespace Hebron.Runtime
 			}
 
 			_pinAddressesHandle = GCHandle.Alloc(_pinAddresses, GCHandleType.Pinned);
+		}
+
+		~UnsafeArray2D()
+		{
+			_pinAddressesHandle.Free();
 		}
 
 		public void* ToPointer() => _pinAddressesHandle.AddrOfPinnedObject().ToPointer();
