@@ -3,6 +3,7 @@ using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using Type = ClangSharp.Type;
 
@@ -510,6 +511,23 @@ namespace Hebron
 			}
 
 			return s;
+		}
+
+		public static string PointerToArray(this string s)
+		{
+			var sb = new StringBuilder();
+			var arrayCount = s.Count(c => c == '*') - 1;
+
+			sb.Append(s.Replace("*", string.Empty));
+			sb.Append("[");
+
+			if (arrayCount > 0)
+			{
+				sb.Append(new string(',', arrayCount));
+			}
+			sb.Append("]");
+
+			return sb.ToString();
 		}
 	}
 }

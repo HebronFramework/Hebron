@@ -1,7 +1,13 @@
 ﻿namespace Hebron.Roslyn
 {
+	public enum UnsafeArrayUsage
+	{
+		UseOrdinaryArray,
+		UseUnsafeArray
+	}
+
 	public class RoslynConversionParameters: BaseConversionParameters
 	{
-		public string[] Classes { get; } = new string[0];
+		public UnsafeArrayUsage GlobalVariablesUnsafeArrayUsage;
 	}
 }

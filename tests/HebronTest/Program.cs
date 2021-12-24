@@ -21,7 +21,7 @@ namespace Hebron
                     "STB_IMAGE_IMPLEMENTATION",
                 },
                 InputPath = @"D:\Projects\StbSharp\stb\stb_image.h",
-                // InputPath = @"D:\Projects\sqlite-amalgamation-3370000\sqlite3.c"
+                // InputPath = @"D:\Projects\sqlite-amalgamation-3370000\sqlite3.c",
                 SkipGlobalVariables = new[]
 				{
                     "stbi__g_failure_reason"
@@ -86,7 +86,7 @@ namespace Hebron
                 "var j = new stbi__jpeg()");
 
             File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\StbImage.Generated.cs", s);
-//            File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\Sqlite.Generated.cs", s);
+            // File.WriteAllText(@"D:\Projects\Chaos\RoslynTest\RoslynTest\Sqlite.Generated.cs", s);
         }
     }
 }

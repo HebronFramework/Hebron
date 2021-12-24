@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -34,8 +35,8 @@ namespace Hebron.Roslyn
 		private TypeDeclarationSyntax FillTypeDeclaration(Cursor cursor, string name, TypeDeclarationSyntax typeDecl)
 		{
 			typeDecl = typeDecl.MakePublic();
-			var declaredArrays = new HashSet<string>();
 
+			var constructorStatements = new List<StatementSyntax>();
 			foreach (NamedDecl child in cursor.CursorChildren)
 			{
 				if (child is RecordDecl)
@@ -87,19 +88,37 @@ namespace Hebron.Roslyn
 					for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
 					{
 						sb.Append(typeInfo.ConstantArraySizes[i]);
-						sb.Append(", ");
-					}
 
-					sb.Append("sizeof(" + typeName + ")");
+						if (i < typeInfo.ConstantArraySizes.Length - 1)
+						{
+							sb.Append(", ");
+						}
+					}
 
 					var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
 					var expr = "public " + arrayTypeName + " " + childName +
 						"Array = new " + arrayTypeName + "(" + sb.ToString() + ");";
 					var arrayFieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+
+					var stmt = ParseStatement(childName + " = " + ToRoslynString(typeInfo).Parentize() + childName + "Array;");
+					constructorStatements.Add(stmt);
+
 					typeDecl = typeDecl.AddMembers(arrayFieldDecl);
 				}
 
 				typeDecl = typeDecl.AddMembers(fieldDecl);
+			}
+
+			if (constructorStatements.Count > 0)
+			{
+				var constructor = ConstructorDeclaration(name).MakePublic();
+
+				foreach(var stmt in constructorStatements)
+				{
+					constructor = constructor.AddBodyStatements(stmt);
+				}
+
+				typeDecl = typeDecl.AddMembers(constructor);
 			}
 
 			return typeDecl;
@@ -121,7 +140,7 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-				var name = recordDecl.TypeForDecl.AsString;
+				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
 				foreach (NamedDecl child in cursor.CursorChildren)
 				{
 					if (child is RecordDecl)
@@ -176,7 +195,7 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-				var name = recordDecl.TypeForDecl.AsString;
+				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
 				if (!IsClass(name) && CheckIsClass(name, dependencyTree))
 				{
 					Logger.Info("Marking struct {0} as class since it references other class", name);
@@ -193,8 +212,13 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-
 				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
+				if (Parameters.SkipStructs.Contains(name))
+				{
+					Logger.Info("Skipping.");
+					continue;
+				}
+
 				Logger.Info("Generating code for struct {0}", name);
 
 				TypeDeclarationSyntax typeDecl;
@@ -208,14 +232,6 @@ namespace Hebron.Roslyn
 				}
 
 				typeDecl = FillTypeDeclaration(cursor, name, typeDecl);
-
-				if (!IsClass(name))
-				{
-
-					// Add SizeOf method
-					var sizeOfMethod = "public int SizeOf() => sizeof(" + name + ");";
-					typeDecl = typeDecl.AddMembers(ParseMemberDeclaration(sizeOfMethod));
-				}
 
 				Result.Structs[name] = typeDecl;
 			}

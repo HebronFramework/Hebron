@@ -28,9 +28,12 @@ namespace Hebron.Roslyn
 
 		public static TypeDeclarationSyntax MakePublic(this TypeDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
 
+		public static ConstructorDeclarationSyntax MakePublic(this ConstructorDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
+
 		public static MethodDeclarationSyntax MakeStatic(this MethodDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.StaticKeyword));
 
 		public static FieldDeclarationSyntax MakeConst(this FieldDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.ConstKeyword));
+
 
 		private static readonly HashSet<string> _specialWords = new HashSet<string>(new[]
 		{

@@ -1,5 +1,6 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +30,7 @@ namespace Hebron.Roslyn
 		private State _state = State.Functions;
 		private FunctionDecl _functionDecl;
 		private List<FieldInfo> _currentStructInfo;
+		private readonly Dictionary<string, string> _localVariablesMap = new Dictionary<string, string>();
 
 		public void ConvertFunctions()
 		{
@@ -37,6 +39,8 @@ namespace Hebron.Roslyn
 			_state = State.Functions;
 			foreach (var cursor in TranslationUnit.EnumerateCursors())
 			{
+				_localVariablesMap.Clear();
+
 				var funcDecl = cursor as FunctionDecl;
 				if (funcDecl == null || !funcDecl.HasBody)
 				{
@@ -90,11 +94,18 @@ namespace Hebron.Roslyn
 			}
 		}
 
-		private string ProcessDeclaration(VarDecl info)
+		private string ProcessDeclaration(VarDecl info, out string name)
 		{
+			var isGlobalVariable = _state == State.GlobalVariables || info.StorageClass == CX_StorageClass.CX_SC_Static;
+
 			string left, right;
 			var size = info.CursorChildren.Count;
-			var name = info.Spelling.FixSpecialWords();
+			name = info.Spelling.FixSpecialWords();
+
+			if (_state == State.Functions && info.StorageClass == CX_StorageClass.CX_SC_Static)
+			{
+				name = _functionDecl.Spelling + "_" + name;
+			}
 
 			var typeInfo = info.Type.ToTypeInfo();
 
@@ -136,24 +147,31 @@ namespace Hebron.Roslyn
 						initListExpr = sb.ToString();
 					}
 
-					if (_state != State.Functions)
+					if (isGlobalVariable)
 					{
-						// Declare array field
-						var arrayVariableName = name + "Array";
-						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
-						var arrayExpr = arrayTypeName + " " + arrayVariableName +
-							" = new " + arrayTypeName + 
-							"(new " + typeName + "[] " + initListExpr + ", sizeof(" + typeName + "));";
+						if (Parameters.GlobalVariablesUnsafeArrayUsage == UnsafeArrayUsage.UseUnsafeArray)
+						{
+							// Declare array field
+							var arrayVariableName = name + "Array";
+							var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
+							var arrayExpr = "var " + arrayVariableName +
+								" = new " + arrayTypeName +
+								"(new " + typeName + "[] " + initListExpr + ");";
 
-						left = arrayExpr + left;
-						right = "(" + type.Depoint() + "*)" + arrayVariableName;
+							left = arrayExpr + type + " " + name;
+							right = "(" + type + ")" + arrayVariableName;
+						} else
+						{
+							left = type.PointerToArray() + " " + name;
+							right = "new " + typeName + "[]" + initListExpr + ";";
+						}
 					}
 					else
 					{
 						right = "stackalloc " + type.Depoint() + "[]" + initListExpr + ";";
 					}
 				}
-				else if (typeInfo.ConstantArraySizes.Length == 1 && !IsClass(typeName))
+				else if (!isGlobalVariable && typeInfo.ConstantArraySizes.Length == 1 && !IsClass(typeName))
 				{
 					right = "stackalloc " + typeName + "[" + typeInfo.ConstantArraySizes[0] + "];";
 				}
@@ -169,24 +187,38 @@ namespace Hebron.Roslyn
 						}
 					}
 
-					if (!IsClass(typeName))
+					if (!IsClass(typeName) && 
+						(!isGlobalVariable || Parameters.GlobalVariablesUnsafeArrayUsage == UnsafeArrayUsage.UseUnsafeArray))
 					{
 						var arrayVariableName = name + "Array";
 						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
 
 						var arrayExpr = arrayTypeName + " " + arrayVariableName +
-							" = new " + arrayTypeName + "(" + sb.ToString() + ", sizeof(" + typeName + "));";
+							" = new " + arrayTypeName + "(" + sb.ToString() + ");";
 
-						left = arrayExpr + left;
+						if (!isGlobalVariable)
+						{
+							left = arrayExpr + "var " + name;
+						}
 						right = "(" + type + ")" + arrayVariableName;
 					} else
 					{
-						left = "var " + name;
+						if (!isGlobalVariable)
+						{
+							left = "var " + name;
+						} else
+						{
+							left = type.PointerToArray() + " " + name;
+						}
+
 						right = "new " + typeName + "[" + sb.ToString() + "];";
 
-						for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
+						if (IsClass(typeName))
 						{
-							right += name + "[" + i + "] = new " + typeName + "();";
+							for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
+							{
+								right += name + "[" + i + "] = new " + typeName + "();";
+							}
 						}
 					}
 				}
@@ -396,7 +428,13 @@ namespace Hebron.Roslyn
 					}
 				case CXCursorKind.CXCursor_DeclRefExpr:
 					{
-						return info.Spelling.FixSpecialWords();
+						var name = info.Spelling.FixSpecialWords();
+						if (_localVariablesMap.ContainsKey(name))
+						{
+							name = _localVariablesMap[name];
+						}
+
+						return name;
 					}
 				case CXCursorKind.CXCursor_CompoundAssignOperator:
 				case CXCursorKind.CXCursor_BinaryOperator:
@@ -775,7 +813,23 @@ namespace Hebron.Roslyn
 				case CXCursorKind.CXCursor_StringLiteral:
 					return info.Spelling.StartsWith("L") ? info.Spelling.Substring(1) : info.Spelling;
 				case CXCursorKind.CXCursor_VarDecl:
-					return ProcessDeclaration((VarDecl)info);
+					{
+						var varDecl = (VarDecl)info;
+						string name;
+						var expr = ProcessDeclaration(varDecl, out name);
+
+						if (_state == State.Functions && 
+							varDecl.StorageClass == CX_StorageClass.CX_SC_Static)
+						{
+							_localVariablesMap[varDecl.Spelling.FixSpecialWords()] = name;
+
+							expr = "public static " + expr;
+							Result.GlobalVariables[name] = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+							return string.Empty;
+						}
+
+						return expr;
+					}
 
 				case CXCursorKind.CXCursor_DeclStmt:
 					{
