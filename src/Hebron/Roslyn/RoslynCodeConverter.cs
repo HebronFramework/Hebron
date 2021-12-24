@@ -1,6 +1,5 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -11,7 +10,13 @@ namespace Hebron.Roslyn
 {
 	public partial class RoslynCodeConverter
 	{
-		private readonly Dictionary<string, DelegateDeclarationSyntax> DelegateMap = new Dictionary<string, DelegateDeclarationSyntax>();
+		private class DelegateInfo
+		{
+			public string Name;
+			public FunctionPointerTypeInfo FunctionInfo;
+		}
+
+		private readonly Dictionary<string, DelegateInfo> DelegateMap = new Dictionary<string, DelegateInfo>();
 		private readonly HashSet<string> Classes = new HashSet<string>();
 		private Dictionary<string, Stack<string>> _variables = new Dictionary<string, Stack<string>>();
 
@@ -92,28 +97,19 @@ namespace Hebron.Roslyn
 			}
 
 			var key = asFunctionPointerType.TypeString;
-			DelegateDeclarationSyntax decl;
+			DelegateInfo decl;
 			if (!DelegateMap.TryGetValue(key, out decl))
 			{
 				var name = "delegate" + DelegateMap.Count;
-				decl = DelegateDeclaration(ParseTypeName(ToRoslynString(asFunctionPointerType.ReturnType)), name)
-					.MakePublic();
-
-				if (asFunctionPointerType.Arguments != null)
+				decl = new DelegateInfo
 				{
-					for(var i = 0; i < asFunctionPointerType.Arguments.Length; ++i)
-					{
-						var arg = asFunctionPointerType.Arguments[i];
-						var argName = "arg" + i;
-						decl = decl.AddParameterListParameters(Parameter(Identifier(argName)).WithType(ParseTypeName(ToRoslynString(arg))));
-					}
-				}
-
+					Name = name,
+					FunctionInfo = asFunctionPointerType
+				};
 				DelegateMap[key] = decl;
-				Result.Delegates[name] = decl;
 			}
 
-			return decl.Identifier.Text;
+			return decl.Name;
 		}
 
 		public string ToRoslynTypeName(CXType type, bool declareMissingTypes = false) => ToRoslynTypeName(type.ToTypeInfo(), declareMissingTypes);

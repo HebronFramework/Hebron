@@ -35,6 +35,11 @@ namespace Hebron.Roslyn
 
 		public void ConvertGlobalVariables()
 		{
+			if (!Parameters.ConversionEntities.HasFlag(ConversionEntities.GlobalVariables))
+			{
+				return;
+			}
+
 			_state = State.GlobalVariables;
 			foreach (var cursor in TranslationUnit.EnumerateCursors())
 			{

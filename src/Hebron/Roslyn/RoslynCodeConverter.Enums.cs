@@ -11,6 +11,11 @@ namespace Hebron.Roslyn
 	{
 		public void ConvertEnums()
 		{
+			if (!Parameters.ConversionEntities.HasFlag(ConversionEntities.Enums))
+			{
+				return;
+			}
+
 			Logger.Info("Processing enums...");
 
 			_state = State.Enums;

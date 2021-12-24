@@ -1,7 +1,21 @@
-﻿namespace Hebron
+﻿using System;
+
+namespace Hebron
 {
+	[Flags]
+	public enum ConversionEntities
+	{
+		Enums = 1,
+		GlobalVariables = 2,
+		Structs = 4,
+		Functions = 8,
+		All = Enums | GlobalVariables | Structs | Functions
+	}
+
 	public class BaseConversionParameters
 	{
+		public ConversionEntities ConversionEntities = ConversionEntities.All;
+
 		public string InputPath { get; set; }
 		public string[] Defines { get; set; }
 

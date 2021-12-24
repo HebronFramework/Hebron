@@ -10,8 +10,12 @@ namespace Hebron.Roslyn
 {
 	partial class RoslynCodeConverter
 	{
-		private bool CheckIsClass(string name, Dictionary<string, List<string>> dependencyTree)
+		private bool CheckIsClass(string name, 
+			Dictionary<string, List<string>> dependencyTree,
+			HashSet<string> parsedNames)
 		{
+			parsedNames.Add(name);
+
 			if (IsClass(name))
 			{
 				return true;
@@ -22,7 +26,12 @@ namespace Hebron.Roslyn
 			{
 				foreach (var dependencyName in dependencyNames)
 				{
-					if (CheckIsClass(dependencyName, dependencyTree))
+					if (parsedNames.Contains(dependencyName))
+					{
+						continue;
+					}
+
+					if (CheckIsClass(dependencyName, dependencyTree, parsedNames))
 					{
 						return true;
 					}
@@ -126,6 +135,11 @@ namespace Hebron.Roslyn
 
 		public void ConvertStructs()
 		{
+			if (!Parameters.ConversionEntities.HasFlag(ConversionEntities.Structs))
+			{
+				return;
+			}
+
 			Logger.Info("Processing structs...");
 
 			_state = State.Structs;
@@ -140,7 +154,7 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
+				var name = recordDecl.GetName().FixSpecialWords();
 				foreach (NamedDecl child in cursor.CursorChildren)
 				{
 					if (child is RecordDecl)
@@ -195,8 +209,8 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
-				if (!IsClass(name) && CheckIsClass(name, dependencyTree))
+				var name = recordDecl.GetName().FixSpecialWords();
+				if (!IsClass(name) && CheckIsClass(name, dependencyTree, new HashSet<string>()))
 				{
 					Logger.Info("Marking struct {0} as class since it references other class", name);
 					Classes.Add(name);
@@ -212,7 +226,7 @@ namespace Hebron.Roslyn
 				}
 
 				var recordDecl = (RecordDecl)cursor;
-				var name = recordDecl.TypeForDecl.AsString.FixSpecialWords();
+				var name = recordDecl.GetName().FixSpecialWords();
 				if (Parameters.SkipStructs.Contains(name))
 				{
 					Logger.Info("Skipping.");
@@ -234,6 +248,43 @@ namespace Hebron.Roslyn
 				typeDecl = FillTypeDeclaration(cursor, name, typeDecl);
 
 				Result.Structs[name] = typeDecl;
+			}
+
+			// First delegate run - add missing return and argument types
+			foreach (var pair in DelegateMap.ToArray())
+			{
+				var functionInfo = pair.Value.FunctionInfo;
+				ToRoslynString(functionInfo.ReturnType, true);
+
+				if (functionInfo.Arguments != null)
+				{
+					for (var i = 0; i < functionInfo.Arguments.Length; ++i)
+					{
+						var arg = functionInfo.Arguments[i];
+						ToRoslynString(arg, true);
+					}
+				}
+			}
+
+			// Second delegate run: declare actual delegates
+			foreach (var pair in DelegateMap)
+			{
+				var name = pair.Value.Name;
+				var functionInfo = pair.Value.FunctionInfo;
+				var decl = DelegateDeclaration(ParseTypeName(ToRoslynString(functionInfo.ReturnType, true)), name)
+					.MakePublic();
+
+				if (functionInfo.Arguments != null)
+				{
+					for (var i = 0; i < functionInfo.Arguments.Length; ++i)
+					{
+						var arg = functionInfo.Arguments[i];
+						var argName = "arg" + i;
+						decl = decl.AddParameterListParameters(Parameter(Identifier(argName)).WithType(ParseTypeName(ToRoslynString(arg, true))));
+					}
+				}
+
+				Result.Delegates[name] = decl;
 			}
 		}
 	}

@@ -34,6 +34,11 @@ namespace Hebron.Roslyn
 
 		public void ConvertFunctions()
 		{
+			if (!Parameters.ConversionEntities.HasFlag(ConversionEntities.Functions))
+			{
+				return;
+			}
+
 			Logger.Info("Processing functions...");
 
 			_state = State.Functions;
@@ -824,7 +829,7 @@ namespace Hebron.Roslyn
 							_localVariablesMap[varDecl.Spelling.FixSpecialWords()] = name;
 
 							expr = "public static " + expr;
-							Result.GlobalVariables[name] = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+//							Result.GlobalVariables[name] = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
 							return string.Empty;
 						}
 

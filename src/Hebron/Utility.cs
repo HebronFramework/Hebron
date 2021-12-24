@@ -529,5 +529,8 @@ namespace Hebron
 
 			return sb.ToString();
 		}
+
+		public static string GetName(this RecordDecl decl) =>
+			decl.TypeForDecl.AsString.Replace("struct ", string.Empty);
 	}
 }
