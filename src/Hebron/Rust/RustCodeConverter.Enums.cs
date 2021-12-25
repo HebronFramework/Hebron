@@ -1,4 +1,5 @@
 ﻿using ClangSharp;
+using System;
 
 namespace Hebron.Rust
 {
@@ -30,7 +31,7 @@ namespace Hebron.Rust
 						value = int.Parse(child.CursorChildren[0].GetLiteralString());
 					}
 
-					var expr = "pub const " + name + ": i32 = " + value + ";\n";
+					var expr = "pub const " + name + ": i32 = " + value + ";" + Environment.NewLine;
 
 					Result.UnnamedEnumValues[child.Spelling] = expr;
 

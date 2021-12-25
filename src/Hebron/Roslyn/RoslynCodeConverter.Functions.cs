@@ -243,7 +243,7 @@ namespace Hebron.Roslyn
 				right = "null";
 			}
 
-			if (string.IsNullOrEmpty(right) && typeInfo is StructTypeInfo && !typeInfo.IsPointer)
+			if (string.IsNullOrEmpty(right) && typeInfo.TypeDescriptor is StructTypeInfo && !typeInfo.IsPointer)
 			{
 				right = "new " + type + "()";
 			}
@@ -326,7 +326,7 @@ namespace Hebron.Roslyn
 				}
 			}
 
-			if (crp.TypeInfo is PrimitiveTypeInfo && !crp.IsPointer)
+			if (crp.TypeInfo.TypeDescriptor is PrimitiveTypeInfo && !crp.IsPointer)
 			{
 				crp.Expression = crp.Expression.Parentize() + " != 0";
 			}

@@ -33,8 +33,8 @@ namespace Hebron.Rust
 		{
 			ConvertEnums();
 			ConvertStructs();
-/*			ConvertGlobalVariables();
-			ConvertFunctions();*/
+			ConvertGlobalVariables();
+//			ConvertFunctions();
 
 			return Result;
 		}
@@ -147,6 +147,13 @@ namespace Hebron.Rust
 			{
 				sb.Append(new string('*', type.PointerCount));
 				sb.Append("mut ");
+
+				if (typeName == "void")
+				{
+					// Rust doesnt support void pointers
+					typeName = "u8";
+				}
+
 				sb.Append(typeName);
 			}
 

@@ -1,36 +1,27 @@
-﻿/*using ClangSharp;
+﻿using ClangSharp;
 using ClangSharp.Interop;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 using Type = ClangSharp.Type;
 
 namespace Hebron.Rust
 {
 	partial class RustCodeConverter
 	{
-		private enum State
-		{
-			Structs,
-			GlobalVariables,
-			Enums,
-			Constants,
-			Functions
-		}
-
 		private class FieldInfo
 		{
 			public string Name;
 			public Type Type;
 		}
 
-		private State _state = State.Functions;
 		private FunctionDecl _functionDecl;
 		private List<FieldInfo> _currentStructInfo;
 		private readonly Dictionary<string, string> _localVariablesMap = new Dictionary<string, string>();
+		private IndentedStringWriter _writer = new IndentedStringWriter();
+
+		private void ResetWriter() => _writer = new IndentedStringWriter();
 
 		public void ConvertFunctions()
 		{
@@ -45,6 +36,7 @@ namespace Hebron.Rust
 			foreach (var cursor in TranslationUnit.EnumerateCursors())
 			{
 				_localVariablesMap.Clear();
+				ResetWriter();
 
 				var funcDecl = cursor as FunctionDecl;
 				if (funcDecl == null || !funcDecl.HasBody)
@@ -63,19 +55,27 @@ namespace Hebron.Rust
 					continue;
 				}
 
-				var md = MethodDeclaration(ParseTypeName(ToRustString(funcDecl.ReturnType)), cursor.Spelling)
-					.MakePublic()
-					.MakeStatic();
+				var name = cursor.Spelling.FixSpecialWords();
 
-				foreach(var p in funcDecl.Parameters)
+				_writer.IndentedWrite("pub fn " + name + "(");
+
+				for(var i = 0; i < funcDecl.Parameters.Count; ++i)
 				{
-					var name = p.Name.FixSpecialWords();
-					var csType = ToRustString(p.Type);
-					PushVariableInfo(name, csType);
-					md = md.AddParameterListParameters(Parameter(Identifier(name)).WithType(ParseTypeName(csType)));
+					var p = funcDecl.Parameters[i];
+					var argName = p.Name.FixSpecialWords();
+					var rustType = ToRustString(p.Type);
+
+					_writer.Write(argName + ": " + rustType);
+					if (i < funcDecl.Parameters.Count - 1)
+					{
+						_writer.Write(", ");
+					}
 				}
 
-				foreach(var child in funcDecl.Body.Children)
+				_writer.WriteLine(") {");
+				++_writer.IndentLevel;
+
+				foreach (var child in funcDecl.Body.Children)
 				{
 					var result = Process(child);
 					if (result == null)
@@ -83,19 +83,15 @@ namespace Hebron.Rust
 						continue;
 					}
 
-					var stmt = ParseStatement(result.Expression.EnsureStatementFinished());
-					md = md.AddBodyStatements(stmt);
+					var stmt = result.Expression.EnsureStatementFinished();
+					_writer.IndentedWriteLine(stmt);
 				}
 
-				md = md.AddBodyStatements();
+				--_writer.IndentLevel;
+				_writer.IndentedWriteLine("}");
 
-				Result.Functions[cursor.Spelling] = md;
 
-				foreach (var p in funcDecl.Parameters)
-				{
-					var name = p.Name.FixSpecialWords();
-					PopVariableInfo(name);
-				}
+				Result.Functions[cursor.Spelling] = _writer.ToString();
 			}
 		}
 
@@ -114,128 +110,18 @@ namespace Hebron.Rust
 
 			var typeInfo = info.Type.ToTypeInfo();
 
-			var type = ToRustString(typeInfo, true);
+			var type = ToRustString(typeInfo);
 			var typeName = ToRustTypeName(typeInfo);
 
-			left = type + " " + name;
+			left = name + ": " + type;
 			right = string.Empty;
 
 			if (size > 0)
 			{
 				var rvalue = ProcessChildByIndex(info, size - 1);
 
-				var expr = rvalue.Expression;
-				if (AppendBoolToInt(rvalue.Info, ref expr))
-				{
-					right = expr;
-				}
-				else if (rvalue.Info.CursorKind == CXCursorKind.CXCursor_InitListExpr)
-				{
-					var initListExpr = rvalue.Expression;
-					if (rvalue.Info.CursorChildren.Count == 1 &&
-						typeInfo.ConstantArraySizes[0] > 1)
-					{
-						var sb = new StringBuilder();
-						sb.Append("{");
+				right = rvalue.Expression;
 
-						var element = rvalue.Expression.Decurlize();
-						for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
-						{
-							sb.Append(element);
-							if (i < typeInfo.ConstantArraySizes[0] - 1)
-							{
-								sb.Append(", ");
-							}
-						}
-						sb.Append("}");
-
-						initListExpr = sb.ToString();
-					}
-
-					if (isGlobalVariable)
-					{
-						if (Parameters.GlobalVariablesUnsafeArrayUsage == UnsafeArrayUsage.UseUnsafeArray)
-						{
-							// Declare array field
-							var arrayVariableName = name + "Array";
-							var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
-							var arrayExpr = "var " + arrayVariableName +
-								" = new " + arrayTypeName +
-								"(new " + typeName + "[] " + initListExpr + ");";
-
-							left = arrayExpr + type + " " + name;
-							right = "(" + type + ")" + arrayVariableName;
-						} else
-						{
-							left = type.PointerToArray() + " " + name;
-							right = "new " + typeName + "[]" + initListExpr + ";";
-						}
-					}
-					else
-					{
-						right = "stackalloc " + type.Depoint() + "[]" + initListExpr + ";";
-					}
-				}
-				else if (!isGlobalVariable && typeInfo.ConstantArraySizes.Length == 1 && !IsClass(typeName))
-				{
-					right = "stackalloc " + typeName + "[" + typeInfo.ConstantArraySizes[0] + "];";
-				}
-				else if(typeInfo.ConstantArraySizes.Length > 0)
-				{
-					var sb = new StringBuilder();
-					for (var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
-					{
-						sb.Append(typeInfo.ConstantArraySizes[i]);
-						if (i < typeInfo.ConstantArraySizes.Length - 1)
-						{
-							sb.Append(", ");
-						}
-					}
-
-					if (!IsClass(typeName) && 
-						(!isGlobalVariable || Parameters.GlobalVariablesUnsafeArrayUsage == UnsafeArrayUsage.UseUnsafeArray))
-					{
-						var arrayVariableName = name + "Array";
-						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
-
-						var arrayExpr = arrayTypeName + " " + arrayVariableName +
-							" = new " + arrayTypeName + "(" + sb.ToString() + ");";
-
-						if (!isGlobalVariable)
-						{
-							left = arrayExpr + "var " + name;
-						}
-						right = "(" + type + ")" + arrayVariableName;
-					} else
-					{
-						if (!isGlobalVariable)
-						{
-							left = "var " + name;
-						} else
-						{
-							left = type.PointerToArray() + " " + name;
-						}
-
-						right = "new " + typeName + "[" + sb.ToString() + "];";
-
-						if (IsClass(typeName))
-						{
-							for (var i = 0; i < typeInfo.ConstantArraySizes[0]; ++i)
-							{
-								right += name + "[" + i + "] = new " + typeName + "();";
-							}
-						}
-					}
-				}
-				else
-				{
-					right = rvalue.Expression;
-				}
-
-				if (!string.IsNullOrEmpty(right) && !typeInfo.IsPointer)
-				{
-					right = right.ApplyCast(type);
-				}
 			}
 
 			if (typeInfo.IsPointer && right.Deparentize() == "0")
@@ -243,7 +129,7 @@ namespace Hebron.Rust
 				right = "null";
 			}
 
-			if (string.IsNullOrEmpty(right) && typeInfo is StructTypeInfo && !typeInfo.IsPointer)
+			if (string.IsNullOrEmpty(right) && typeInfo.TypeDescriptor is StructTypeInfo && !typeInfo.IsPointer)
 			{
 				right = "new " + type + "()";
 			}
@@ -326,7 +212,7 @@ namespace Hebron.Rust
 				}
 			}
 
-			if (crp.TypeInfo is PrimitiveTypeInfo && !crp.IsPointer)
+			if (crp.TypeInfo.TypeDescriptor is PrimitiveTypeInfo && !crp.IsPointer)
 			{
 				crp.Expression = crp.Expression.Parentize() + " != 0";
 			}
@@ -415,12 +301,12 @@ namespace Hebron.Rust
 									return expr.TypeInfo.ConstantArraySizes[0] + " * sizeof(" + ToRustTypeName(expr.TypeInfo) + ")";
 								}
 
-								return "sizeof(" + expr.CsType + ")";
+								return "sizeof(" + expr.RustType + ")";
 							}
 
 							if (expr.Info.CursorKind == CXCursorKind.CXCursor_TypeRef)
 							{
-								return op + "(" + expr.CsType + ")";
+								return op + "(" + expr.RustType + ")";
 							}
 						}
 
@@ -491,18 +377,6 @@ namespace Hebron.Rust
 							}
 						}
 
-						if (a.IsPointer)
-						{
-							if (a.IsClass)
-							{
-								switch (type)
-								{
-									case CX_BinaryOperatorKind.CX_BO_Add:
-										return a.Expression + "[" + b.Expression + "]";
-								}
-							}
-						}
-
 						if (a.IsPointer && (type == CX_BinaryOperatorKind.CX_BO_Assign || type.IsBooleanOperator()) &&
 							(b.Expression.Deparentize() == "0"))
 						{
@@ -522,12 +396,6 @@ namespace Hebron.Rust
 						var str = info.GetOperatorString();
 
 						var typeInfo = info.ToTypeInfo();
-
-						if (IsClass(typeInfo) && 
-							(type == CX_UnaryOperatorKind.CX_UO_AddrOf || type == CX_UnaryOperatorKind.CX_UO_Deref))
-						{
-							str = string.Empty;
-						}
 
 						var left = type.IsUnaryOperatorPre();
 						if (left)
@@ -558,7 +426,7 @@ namespace Hebron.Rust
 							}
 							else if (!argExpr.IsPointer)
 							{
-								argExpr.Expression = argExpr.Expression.ApplyCast(argExpr.CsType);
+								argExpr.Expression = argExpr.Expression.ApplyCast(argExpr.RustType);
 							}
 							else if (argExpr.Expression.Deparentize() == "0")
 							{
@@ -789,7 +657,7 @@ namespace Hebron.Rust
 						var a = ProcessChildByIndex(info, 0);
 
 						var op = ".";
-						if (a.Expression != "this" && !a.IsClass && a.IsPointer)
+						if (a.Expression != "this" && a.IsPointer)
 						{
 							op = "->";
 						}
@@ -802,7 +670,13 @@ namespace Hebron.Rust
 				case CXCursorKind.CXCursor_IntegerLiteral:
 				case CXCursorKind.CXCursor_FloatingLiteral:
 					{
-						return info.GetLiteralString();
+						var result = info.GetLiteralString();
+						if (info.Handle.Kind == CXCursorKind.CXCursor_FloatingLiteral)
+						{
+							result += "32";
+						}
+
+						return result;
 					}
 				case CXCursorKind.CXCursor_CharacterLiteral:
 					{
@@ -889,7 +763,7 @@ namespace Hebron.Rust
 							sb.Append("new " + ToRustTypeName(tt) + " ");
 						}
 
-						sb.Append("{ ");
+						sb.Append("[ ");
 						var size = info.CursorChildren.Count;
 						for (var i = 0; i < size; ++i)
 						{
@@ -924,7 +798,7 @@ namespace Hebron.Rust
 							}
 						}
 
-						sb.Append(" }");
+						sb.Append(" ]");
 						return sb.ToString();
 					}
 
@@ -935,7 +809,7 @@ namespace Hebron.Rust
 						var tt = info.ToTypeInfo();
 						var csType = ToRustString(tt);
 
-						if (csType != expr.CsType)
+						if (csType != expr.RustType)
 						{
 							e = e.ApplyCast(csType);
 						} else
@@ -963,7 +837,7 @@ namespace Hebron.Rust
 						if (expr == "0" && tt.IsPointer)
 						{
 							// null
-						} else if (csType != child.CsType)
+						} else if (csType != child.RustType)
 						{
 							// cast
 							expr = expr.ApplyCast(csType);
@@ -985,9 +859,15 @@ namespace Hebron.Rust
 						var expr = ProcessChildByIndex(info, size - 1);
 
 						var typeInfo = info.ToTypeInfo();
+						var rustType = ToRustString(typeInfo);
 						if (typeInfo.IsPointer && expr.Expression.Deparentize() == "0")
 						{
 							expr.Expression = "null";
+						}
+
+						if (!typeInfo.IsPointer && rustType != expr.RustType)
+						{
+							expr.Expression += " as " + rustType;
 						}
 
 						return expr.Expression;
@@ -1038,4 +918,4 @@ namespace Hebron.Rust
 			return executionExpr;
 		}
 	}
-}*/
+}

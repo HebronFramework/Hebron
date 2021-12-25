@@ -10,7 +10,7 @@ namespace Hebron.Rust
 		{
 			var declaration = new IndentedStringWriter();
 			declaration.IndentedWriteLine("#[derive(Debug, Copy, Clone)]");
-			declaration.IndentedWriteLine("struct " + name + " {");
+			declaration.IndentedWriteLine("pub struct " + name + " {");
 			++declaration.IndentLevel;
 
 			var def = new IndentedStringWriter();
@@ -41,7 +41,7 @@ namespace Hebron.Rust
 					typeInfo = new TypeInfo(new StructTypeInfo(subName), typeInfo.PointerCount, typeInfo.ConstantArraySizes);
 				}
 
-				var expr = childName + ":" + ToRustString(typeInfo) + ",";
+				var expr = "pub " + childName + ":" + ToRustString(typeInfo) + ",";
 				declaration.IndentedWriteLine(expr);
 
 				expr = childName + ": " + typeInfo.GetDefaltValue() + ",";

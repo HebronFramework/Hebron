@@ -18,7 +18,7 @@ namespace Hebron
 		{
 			if (LogFunction != null)
 			{
-				LogFunction(data + "\n");
+				LogFunction(data + Environment.NewLine);
 			}
 		}
 

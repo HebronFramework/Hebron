@@ -126,7 +126,7 @@ namespace Hebron.Roslyn
 
 			if (_state == State.Functions &&
 				type.ConstantArraySizes.Length == 1 &&
-				(type is PrimitiveTypeInfo || (asStruct != null && !IsClass(typeName))))
+				(type.TypeDescriptor is PrimitiveTypeInfo || (asStruct != null && !IsClass(typeName))))
 			{
 				// stackalloc
 			}

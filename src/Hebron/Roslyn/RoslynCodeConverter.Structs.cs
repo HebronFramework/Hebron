@@ -73,7 +73,7 @@ namespace Hebron.Roslyn
 
 				FieldDeclarationSyntax fieldDecl = null;
 
-				var isFixedField = !IsClass(name) && typeInfo is PrimitiveTypeInfo &&
+				var isFixedField = !IsClass(name) && typeInfo.TypeDescriptor is PrimitiveTypeInfo &&
 					typeInfo.ConstantArraySizes.Length == 1;
 				if (isFixedField)
 				{
