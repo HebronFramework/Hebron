@@ -3,7 +3,6 @@ using ClangSharp.Interop;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 using Type = ClangSharp.Type;
 
 namespace Hebron.Roslyn
@@ -32,7 +31,7 @@ namespace Hebron.Roslyn
 		}
 
 		internal bool IsClass(string name) => Classes.Contains(name);
-		internal bool IsClass(BaseTypeInfo typeInfo) => IsClass(typeInfo.TypeName);
+		internal bool IsClass(TypeInfo typeInfo) => IsClass(typeInfo.TypeName);
 
 		public RoslynConversionResult Convert()
 		{
@@ -50,9 +49,9 @@ namespace Hebron.Roslyn
 			return converter.Convert();
 		}
 
-		public string ToRoslynTypeName(BaseTypeInfo type, bool declareMissingTypes = false)
+		public string ToRoslynTypeName(TypeInfo type, bool declareMissingTypes = false)
 		{
-			var asPrimitiveType = type as PrimitiveTypeInfo;
+			var asPrimitiveType = type.TypeDescriptor as PrimitiveTypeInfo;
 			if (asPrimitiveType != null)
 			{
 				switch (asPrimitiveType.PrimitiveType)
@@ -84,19 +83,19 @@ namespace Hebron.Roslyn
 				}
 			}
 
-			var asStructType = type as StructTypeInfo;
+			var asStructType = type.TypeDescriptor as StructTypeInfo;
 			if (asStructType != null)
 			{
 				return asStructType.StructName;
 			}
 
-			var asFunctionPointerType = (FunctionPointerTypeInfo)type;
+			var asFunctionPointerType = (FunctionPointerTypeInfo)type.TypeDescriptor;
 			if (!declareMissingTypes)
 			{
 				return asFunctionPointerType.TypeName;
 			}
 
-			var key = asFunctionPointerType.TypeString;
+			var key = type.TypeString;
 			DelegateInfo decl;
 			if (!DelegateMap.TryGetValue(key, out decl))
 			{
@@ -115,11 +114,11 @@ namespace Hebron.Roslyn
 		public string ToRoslynTypeName(CXType type, bool declareMissingTypes = false) => ToRoslynTypeName(type.ToTypeInfo(), declareMissingTypes);
 		public string ToRoslynTypeName(Type type, bool declareMissingTypes = false) => ToRoslynTypeName(type.Handle, declareMissingTypes);
 
-		public string ToRoslynString(BaseTypeInfo type, bool declareMissingTypes = false)
+		public string ToRoslynString(TypeInfo type, bool declareMissingTypes = false)
 		{
 			var typeName = ToRoslynTypeName(type, declareMissingTypes);
 
-			var asStruct = type as StructTypeInfo;
+			var asStruct = type.TypeDescriptor as StructTypeInfo;
 			if (asStruct != null && IsClass(typeName))
 			{
 				return typeName;
@@ -132,7 +131,7 @@ namespace Hebron.Roslyn
 				// stackalloc
 			}
 
-			var asFunctionPointerType = type as FunctionPointerTypeInfo;
+			var asFunctionPointerType = type.TypeDescriptor as FunctionPointerTypeInfo;
 			if (asFunctionPointerType != null)
 			{
 				return typeName;
@@ -152,7 +151,7 @@ namespace Hebron.Roslyn
 		public string ToRoslynString(CXType type, bool declareMissingTypes = false) => ToRoslynString(type.ToTypeInfo(), declareMissingTypes);
 		public string ToRoslynString(Type type, bool declareMissingTypes = false) => ToRoslynString(type.Handle, declareMissingTypes);
 
-		public string BuildUnsafeArrayTypeName(BaseTypeInfo typeInfo)
+		public string BuildUnsafeArrayTypeName(TypeInfo typeInfo)
 		{
 			var typeName = ToRoslynTypeName(typeInfo);
 			return "UnsafeArray" + typeInfo.ConstantArraySizes.Length + "D<" + typeName + ">";

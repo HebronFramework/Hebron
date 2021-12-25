@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using Type = ClangSharp.Type;
 
 namespace Hebron
@@ -25,16 +26,9 @@ namespace Hebron
 		Void
 	}
 
-	public abstract class BaseTypeInfo
+	public abstract class BaseTypeDescriptor
 	{
-		private string _typeName, _typeString;
-
-		public int PointerCount { get; private set; }
-
-		public int[] ConstantArraySizes { get; private set; }
-
-		public bool IsArray => ConstantArraySizes != null && ConstantArraySizes.Length > 0;
-		public bool IsPointer => PointerCount > 0;
+		private string _typeName;
 
 		public string TypeName
 		{
@@ -49,53 +43,20 @@ namespace Hebron
 			}
 		}
 
-		public string TypeString
+		protected BaseTypeDescriptor()
 		{
-			get
-			{
-				if (string.IsNullOrEmpty(_typeString))
-				{
-					var sb = new StringBuilder();
-					sb.Append(TypeName);
-
-					if (PointerCount > 0)
-					{
-						sb.Append(" ");
-					}
-
-					for (var i = 0; i < PointerCount; ++i)
-					{
-						sb.Append("*");
-					}
-
-					_typeString = sb.ToString();
-				}
-
-				return _typeString;
-			}
-		}
-
-		public BaseTypeInfo(int pointerCount, int[] constantArraySizes)
-		{
-			if (pointerCount < 0)
-			{
-				throw new ArgumentOutOfRangeException(nameof(pointerCount));
-			}
-
-			ConstantArraySizes = constantArraySizes;
-			PointerCount = pointerCount;
 		}
 
 		public abstract string BuildTypeString();
 
-		public override string ToString() => TypeString;
+		public override string ToString() => TypeName;
 	}
 
-	public class PrimitiveTypeInfo : BaseTypeInfo
+	public class PrimitiveTypeInfo : BaseTypeDescriptor
 	{
 		public PrimitiveType PrimitiveType { get; private set; }
 
-		public PrimitiveTypeInfo(PrimitiveType primiveType, int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
+		public PrimitiveTypeInfo(PrimitiveType primiveType)
 		{
 			PrimitiveType = primiveType;
 		}
@@ -103,11 +64,11 @@ namespace Hebron
 		public override string BuildTypeString() => PrimitiveType.ToString();
 	}
 
-	public class StructTypeInfo : BaseTypeInfo
+	public class StructTypeInfo : BaseTypeDescriptor
 	{
 		public string StructName { get; private set; }
 
-		public StructTypeInfo(string structName, int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
+		public StructTypeInfo(string structName)
 		{
 			StructName = structName;
 		}
@@ -115,13 +76,12 @@ namespace Hebron
 		public override string BuildTypeString() => StructName;
 	}
 
-	public class FunctionPointerTypeInfo : BaseTypeInfo
+	public class FunctionPointerTypeInfo : BaseTypeDescriptor
 	{
-		public BaseTypeInfo ReturnType { get; private set; }
-		public BaseTypeInfo[] Arguments { get; private set; }
+		public TypeInfo ReturnType { get; private set; }
+		public TypeInfo[] Arguments { get; private set; }
 
-		public FunctionPointerTypeInfo(BaseTypeInfo returnType, BaseTypeInfo[] arguments,
-			int pointerCount, int[] constantArraySizes) : base(pointerCount, constantArraySizes)
+		public FunctionPointerTypeInfo(TypeInfo returnType, TypeInfo[] arguments)
 		{
 			ReturnType = returnType ?? throw new ArgumentNullException(nameof(returnType));
 			Arguments = arguments;
@@ -151,6 +111,62 @@ namespace Hebron
 
 			return sb.ToString();
 		}
+	}
+
+	public class TypeInfo
+	{
+		private string _typeString;
+
+		public BaseTypeDescriptor TypeDescriptor { get; private set; }
+
+		public int PointerCount { get; private set; }
+
+		public int[] ConstantArraySizes { get; private set; }
+
+		public bool IsArray => ConstantArraySizes != null && ConstantArraySizes.Length > 0;
+		public bool IsPointer => PointerCount > 0;
+
+		public string TypeName => TypeDescriptor.TypeName;
+
+		public string TypeString
+		{
+			get
+			{
+				if (string.IsNullOrEmpty(_typeString))
+				{
+					var sb = new StringBuilder();
+					sb.Append(TypeDescriptor.TypeName);
+
+					if (PointerCount > 0)
+					{
+						sb.Append(" ");
+					}
+
+					for (var i = 0; i < PointerCount; ++i)
+					{
+						sb.Append("*");
+					}
+
+					_typeString = sb.ToString();
+				}
+
+				return _typeString;
+			}
+		}
+
+		public TypeInfo(BaseTypeDescriptor typeDescriptor, int pointerCount, int[] constantArraySizes)
+		{
+			if (pointerCount < 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(pointerCount));
+			}
+
+			TypeDescriptor = typeDescriptor ?? throw new ArgumentNullException(nameof(typeDescriptor));
+			ConstantArraySizes = constantArraySizes;
+			PointerCount = pointerCount;
+		}
+
+		public override string ToString() => TypeString;
 	}
 
 	internal static class Utility
@@ -314,7 +330,7 @@ namespace Hebron
 			return null;
 		}
 
-		public static BaseTypeInfo ToTypeInfo(this CXType type)
+		public static TypeInfo ToTypeInfo(this CXType type)
 		{
 			var run = true;
 			int typeEnum = 0;
@@ -361,12 +377,12 @@ namespace Hebron
 				}
 			}
 
-			BaseTypeInfo result = null;
+			TypeInfo result = null;
 
 			switch (typeEnum)
 			{
 				case 0:
-					result = new PrimitiveTypeInfo(type.kind.ToPrimitiveType().Value, pointerCount, constantArraySizes.ToArray());
+					result = new TypeInfo(new PrimitiveTypeInfo(type.kind.ToPrimitiveType().Value), pointerCount, constantArraySizes.ToArray());
 					break;
 				case 1:
 					{
@@ -378,27 +394,27 @@ namespace Hebron
 						}
 
 						name = name.Replace("struct ", string.Empty);
-						result = new StructTypeInfo(name, pointerCount, constantArraySizes.ToArray());
+						result = new TypeInfo(new StructTypeInfo(name), pointerCount, constantArraySizes.ToArray());
 					}
 					break;
 				case 2:
-					var args = new List<BaseTypeInfo>();
+					var args = new List<TypeInfo>();
 					for (var i = 0; i < type.NumArgTypes; ++i)
 					{
 						var arg = type.GetArgType((uint)i);
 						args.Add(arg.ToTypeInfo());
 					}
 
-					result = new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray(), pointerCount, constantArraySizes.ToArray());
+					result = new TypeInfo(new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray()), pointerCount, constantArraySizes.ToArray());
 					break;
 			}
 
 			return result;
 		}
 
-		public static BaseTypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
-		public static BaseTypeInfo ToTypeInfo(this CXCursor cursor) => cursor.Type.ToTypeInfo();
-		public static BaseTypeInfo ToTypeInfo(this Cursor cursor) => cursor.Handle.ToTypeInfo();
+		public static TypeInfo ToTypeInfo(this Type type) => type.Handle.ToTypeInfo();
+		public static TypeInfo ToTypeInfo(this CXCursor cursor) => cursor.Type.ToTypeInfo();
+		public static TypeInfo ToTypeInfo(this Cursor cursor) => cursor.Handle.ToTypeInfo();
 
 		public static bool IsLogicalBooleanOperator(this CX_BinaryOperatorKind op)
 		{
@@ -455,9 +471,9 @@ namespace Hebron
 			return false;
 		}
 
-		public static bool IsPrimitiveNumericType(this BaseTypeInfo typeInfo)
+		public static bool IsPrimitiveNumericType(this TypeInfo typeInfo)
 		{
-			var asPrimitive = typeInfo as PrimitiveTypeInfo;
+			var asPrimitive = typeInfo.TypeDescriptor as PrimitiveTypeInfo;
 			return asPrimitive != null && asPrimitive.PrimitiveType != PrimitiveType.Void;
 		}
 
@@ -532,5 +548,159 @@ namespace Hebron
 
 		public static string GetName(this RecordDecl decl) =>
 			decl.TypeForDecl.AsString.Replace("struct ", string.Empty);
+
+		public static bool IsVoid(this TypeInfo typeInfo)
+		{
+			var asPrimitiveType = typeInfo.TypeDescriptor as PrimitiveTypeInfo;
+			if (asPrimitiveType == null)
+			{
+				return false;
+			}
+
+			return asPrimitiveType.PrimitiveType == PrimitiveType.Void;
+		}
+
+		public static bool CorrectlyParentized(this string expr)
+		{
+			if (string.IsNullOrEmpty(expr))
+			{
+				return false;
+			}
+
+			expr = expr.Trim();
+			if (expr.StartsWith("(") && expr.EndsWith(")"))
+			{
+				var pcount = 1;
+				for (var i = 1; i < expr.Length - 1; ++i)
+				{
+					var c = expr[i];
+
+					if (c == '(')
+					{
+						++pcount;
+					}
+					else if (c == ')')
+					{
+						--pcount;
+					}
+
+					if (pcount == 0)
+					{
+						break;
+					}
+				}
+
+				if (pcount > 0)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		public static string Parentize(this string expr)
+		{
+			if (expr.CorrectlyParentized())
+			{
+				return expr;
+			}
+
+			return "(" + expr + ")";
+		}
+
+		public static string Deparentize(this string expr)
+		{
+			if (string.IsNullOrEmpty(expr))
+			{
+				return expr;
+			}
+
+			// Remove white space
+			expr = Regex.Replace(expr, @"\s+", "");
+
+			while (expr.CorrectlyParentized())
+			{
+				expr = expr.Substring(1, expr.Length - 2);
+			}
+
+			return expr;
+		}
+
+		public static string EnsureStatementFinished(this string statement)
+		{
+			var trimmed = statement.Trim();
+
+			if (string.IsNullOrEmpty(trimmed))
+			{
+				return trimmed;
+			}
+
+			if (!trimmed.EndsWith(";") && !trimmed.EndsWith("}"))
+			{
+				return statement + ";";
+			}
+
+			return statement;
+		}
+
+		public static string EnsureStatementEndWithSemicolon(this string statement)
+		{
+			var trimmed = statement.Trim();
+
+			if (string.IsNullOrEmpty(trimmed))
+			{
+				return ";";
+			}
+
+			if (!trimmed.EndsWith(";"))
+			{
+				return statement + ";";
+			}
+
+			return statement;
+		}
+
+		public static string Curlize(this string expr)
+		{
+			expr = expr.Trim();
+
+			if (expr.StartsWith("{") && expr.EndsWith("}"))
+			{
+				return expr;
+			}
+
+			return "{" + expr + "}";
+		}
+
+		public static string Decurlize(this string expr)
+		{
+			expr = expr.Trim();
+
+			if (expr.StartsWith("{") && expr.EndsWith("}"))
+			{
+				return expr.Substring(1, expr.Length - 2).Trim();
+			}
+
+			return expr;
+		}
+
+		private static readonly HashSet<string> NativeFunctions = new HashSet<string>
+		{
+			"malloc",
+			"free",
+			"abs",
+			"strcmp",
+			"strtol",
+			"strncmp",
+			"memset",
+			"realloc",
+			"pow",
+			"memcpy",
+			"_lrotl",
+			"ldexp",
+		};
+
+		public static bool IsNativeFunctionName(this string name) => NativeFunctions.Contains(name);
 	}
 }

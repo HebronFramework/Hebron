@@ -1,9 +1,6 @@
-﻿using ClangSharp;
-using ClangSharp.Interop;
-using Microsoft.CodeAnalysis.CSharp;
+﻿using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -11,13 +8,6 @@ namespace Hebron.Roslyn
 {
 	internal static class RoslynUtility
 	{
-		public enum RecordType
-		{
-			None,
-			Struct,
-			Class
-		}
-
 		public static EnumDeclarationSyntax MakePublic(this EnumDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
 
 		public static FieldDeclarationSyntax MakePublic(this FieldDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
@@ -48,73 +38,6 @@ namespace Hebron.Roslyn
 			}
 
 			return name;
-		}
-
-		public static bool CorrectlyParentized(this string expr)
-		{
-			if (string.IsNullOrEmpty(expr))
-			{
-				return false;
-			}
-
-			expr = expr.Trim();
-			if (expr.StartsWith("(") && expr.EndsWith(")"))
-			{
-				var pcount = 1;
-				for (var i = 1; i < expr.Length - 1; ++i)
-				{
-					var c = expr[i];
-
-					if (c == '(')
-					{
-						++pcount;
-					}
-					else if (c == ')')
-					{
-						--pcount;
-					}
-
-					if (pcount == 0)
-					{
-						break;
-					}
-				}
-
-				if (pcount > 0)
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		public static string Parentize(this string expr)
-		{
-			if (expr.CorrectlyParentized())
-			{
-				return expr;
-			}
-
-			return "(" + expr + ")";
-		}
-
-		public static string Deparentize(this string expr)
-		{
-			if (string.IsNullOrEmpty(expr))
-			{
-				return expr;
-			}
-
-			// Remove white space
-			expr = Regex.Replace(expr, @"\s+", "");
-
-			while (expr.CorrectlyParentized())
-			{
-				expr = expr.Substring(1, expr.Length - 2);
-			}
-
-			return expr;
 		}
 
 		public static string ApplyCast(this string expr, string type)
@@ -152,83 +75,9 @@ namespace Hebron.Roslyn
 			return cursorProcessResult != null ? cursorProcessResult.Expression : string.Empty;
 		}
 
-		public static string EnsureStatementFinished(this string statement)
-		{
-			var trimmed = statement.Trim();
-
-			if (string.IsNullOrEmpty(trimmed))
-			{
-				return trimmed;
-			}
-
-			if (!trimmed.EndsWith(";") && !trimmed.EndsWith("}"))
-			{
-				return statement + ";";
-			}
-
-			return statement;
-		}
-
-		public static string EnsureStatementEndWithSemicolon(this string statement)
-		{
-			var trimmed = statement.Trim();
-
-			if (string.IsNullOrEmpty(trimmed))
-			{
-				return ";";
-			}
-
-			if (!trimmed.EndsWith(";"))
-			{
-				return statement + ";";
-			}
-
-			return statement;
-		}
-
-		public static string Curlize(this string expr)
-		{
-			expr = expr.Trim();
-
-			if (expr.StartsWith("{") && expr.EndsWith("}"))
-			{
-				return expr;
-			}
-
-			return "{" + expr + "}";
-		}
-
-		public static string Decurlize(this string expr)
-		{
-			expr = expr.Trim();
-
-			if (expr.StartsWith("{") && expr.EndsWith("}"))
-			{
-				return expr.Substring(1, expr.Length - 2).Trim();
-			}
-
-			return expr;
-		}
-
-		private static readonly HashSet<string> NativeFunctions = new HashSet<string>
-		{
-			"malloc",
-			"free",
-			"abs",
-			"strcmp",
-			"strtol",
-			"strncmp",
-			"memset",
-			"realloc",
-			"pow",
-			"memcpy",
-			"_lrotl",
-			"ldexp",
-		};
-
 		public static string UpdateNativeCall(this string functionName)
 		{
-			if (NativeFunctions.Contains(functionName))
+			if (functionName.IsNativeFunctionName())
 			{
 				return "CRuntime." + functionName;
 			}

@@ -6,13 +6,13 @@ namespace Hebron.Roslyn
 	public class CursorProcessResult
 	{
 		private readonly Cursor _info;
-		private readonly BaseTypeInfo _typeInfo;
+		private readonly TypeInfo _typeInfo;
 		private readonly string _csType;
 		private bool _isClass;
 
 		public Cursor Info => _info;
 
-		public BaseTypeInfo TypeInfo => _typeInfo;
+		public TypeInfo TypeInfo => _typeInfo;
 
 		public string Expression { get; set; }
 

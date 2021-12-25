@@ -6,7 +6,7 @@ namespace Hebron
 	{
 		private readonly StringWriter Writer = new StringWriter();
 
-		public int IndentLevel { get; set; } = 2;
+		public int IndentLevel { get; set; } = 0;
 		public string Result => Writer.ToString();
 
 		public void WriteIndent()
@@ -94,5 +94,7 @@ namespace Hebron
 
 			Writer.Write(s);
 		}
+
+		public override string ToString() => Result;
 	}
 }

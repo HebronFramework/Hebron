@@ -66,7 +66,7 @@ namespace Hebron.Roslyn
 					subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl);
 					typeDecl = typeDecl.AddMembers(subTypeDecl);
 
-					typeInfo = new StructTypeInfo(subName, typeInfo.PointerCount, typeInfo.ConstantArraySizes);
+					typeInfo = new TypeInfo(new StructTypeInfo(subName), typeInfo.PointerCount, typeInfo.ConstantArraySizes);
 				}
 
 				var typeName = ToRoslynTypeName(typeInfo);
@@ -164,7 +164,7 @@ namespace Hebron.Roslyn
 
 					var asField = (FieldDecl)child;
 					var typeInfo = asField.Type.ToTypeInfo();
-					var asStruct = typeInfo as StructTypeInfo;
+					var asStruct = typeInfo.TypeDescriptor as StructTypeInfo;
 					if (asStruct != null)
 					{
 						List<string> names;
@@ -175,7 +175,7 @@ namespace Hebron.Roslyn
 						}
 
 						names.Add(asStruct.StructName);
-						if (asStruct.IsArray)
+						if (typeInfo.IsArray)
 						{
 							Logger.Info("Marking struct {0} as class since it contains array of type {1}", name, asStruct.StructName);
 							Classes.Add(name);
@@ -183,7 +183,7 @@ namespace Hebron.Roslyn
 						}
 					}
 
-					var asFunctionPointer = typeInfo as FunctionPointerTypeInfo;
+					var asFunctionPointer = typeInfo.TypeDescriptor as FunctionPointerTypeInfo;
 					if (asFunctionPointer != null)
 					{
 						Logger.Info("Marking struct {0} as class since it contains function pointers", name);
