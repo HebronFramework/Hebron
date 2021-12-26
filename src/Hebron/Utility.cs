@@ -551,6 +551,11 @@ namespace Hebron
 
 		public static bool IsVoid(this TypeInfo typeInfo)
 		{
+			if (typeInfo.IsPointer)
+			{
+				return false;
+			}
+
 			var asPrimitiveType = typeInfo.TypeDescriptor as PrimitiveTypeInfo;
 			if (asPrimitiveType == null)
 			{

@@ -34,7 +34,7 @@ namespace Hebron.Rust
 				var res = Process(cursor);
 
 				var varName = res.Expression.Split(':')[0];
-				var expr = ("pub static " + res.Expression).EnsureStatementEndWithSemicolon();
+				var expr = res.Expression.EnsureStatementEndWithSemicolon();
 				Result.GlobalVariables[varName] = expr;
 			}
 		}

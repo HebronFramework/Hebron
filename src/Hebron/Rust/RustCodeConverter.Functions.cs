@@ -57,7 +57,7 @@ namespace Hebron.Rust
 
 				var name = cursor.Spelling.FixSpecialWords();
 
-				_writer.IndentedWrite("pub fn " + name + "(");
+				_writer.IndentedWrite("pub unsafe fn " + name + "(");
 
 				for(var i = 0; i < funcDecl.Parameters.Count; ++i)
 				{
@@ -72,7 +72,16 @@ namespace Hebron.Rust
 					}
 				}
 
-				_writer.WriteLine(") {");
+				_writer.Write(")");
+
+				var returnTypeInfo = funcDecl.ReturnType.ToTypeInfo();
+				if (!returnTypeInfo.IsVoid())
+				{
+					_writer.Write(" -> " + ToRustString(returnTypeInfo));
+				}
+
+				_writer.WriteLine(" {");
+
 				++_writer.IndentLevel;
 
 				foreach (var child in funcDecl.Body.Children)
@@ -116,6 +125,14 @@ namespace Hebron.Rust
 			left = name + ": " + type;
 			right = string.Empty;
 
+			if (isGlobalVariable)
+			{
+				left = "pub static " + left;
+			} else
+			{
+				left = "let mut " + left;
+			}
+
 			if (size > 0)
 			{
 				var rvalue = ProcessChildByIndex(info, size - 1);
@@ -124,19 +141,16 @@ namespace Hebron.Rust
 
 			}
 
-			if (typeInfo.IsPointer && right.Deparentize() == "0")
+			if (string.IsNullOrEmpty(right))
 			{
-				right = "null";
-			}
-
-			if (string.IsNullOrEmpty(right) && typeInfo.TypeDescriptor is StructTypeInfo && !typeInfo.IsPointer)
-			{
-				right = "new " + type + "()";
-			}
-
-			if (string.IsNullOrEmpty(right) && !typeInfo.IsPointer)
-			{
-				right = "0";
+				if (typeInfo.IsPointer)
+				{
+					right = "std::ptr::null_mut()";
+				}
+				else
+				{
+					right = "Default::default()";
+				}
 			}
 
 			_currentStructInfo = null;
@@ -298,15 +312,15 @@ namespace Hebron.Rust
 
 								if (expr.TypeInfo.ConstantArraySizes.Length == 1)
 								{
-									return expr.TypeInfo.ConstantArraySizes[0] + " * sizeof(" + ToRustTypeName(expr.TypeInfo) + ")";
+									return expr.TypeInfo.ConstantArraySizes[0] + " * std::mem::size_of(" + ToRustTypeName(expr.TypeInfo) + ")";
 								}
 
-								return "sizeof(" + expr.RustType + ")";
+								return "std::mem::size_of(" + expr.RustType + ")";
 							}
 
 							if (expr.Info.CursorKind == CXCursorKind.CXCursor_TypeRef)
 							{
-								return op + "(" + expr.RustType + ")";
+								return "std::mem::size_of::<" + expr.RustType + ">()";
 							}
 						}
 
@@ -377,10 +391,34 @@ namespace Hebron.Rust
 							}
 						}
 
+						if (a.IsPointer && b.IsPrimitiveNumericType)
+						{
+							switch (type)
+							{
+								case CX_BinaryOperatorKind.CX_BO_Add:
+									return "(" + a.Expression + ").offset((" + b.Expression + ") as isize)";
+								case CX_BinaryOperatorKind.CX_BO_Sub:
+									return "(" + a.Expression + ").offset(-((" + b.Expression + ") as isize))";
+							}
+						}
+
 						if (a.IsPointer && (type == CX_BinaryOperatorKind.CX_BO_Assign || type.IsBooleanOperator()) &&
 							(b.Expression.Deparentize() == "0"))
 						{
-							b.Expression = "null";
+							b.Expression = "std::ptr::null_mut()";
+						}
+
+						if (a.IsPointer && b.IsPointer && type == CX_BinaryOperatorKind.CX_BO_Sub)
+						{
+							// b.Expression += ".as_mut_ptr()";
+
+							a.Expression = a.Expression.ApplyCast("usize");
+							b.Expression = b.Expression.ApplyCast("usize");
+						}
+
+						if (a.IsPointer && type == CX_BinaryOperatorKind.CX_BO_AddAssign)
+						{
+							return a.Expression + " = " + a.Expression + ".offset((" + b.Expression + ") as isize)";
 						}
 
 						var str = info.GetOperatorString();
@@ -395,7 +433,35 @@ namespace Hebron.Rust
 						var type = clangsharp.Cursor_getUnaryOpcode(info.Handle);
 						var str = info.GetOperatorString();
 
-						var typeInfo = info.ToTypeInfo();
+						if (type == CX_UnaryOperatorKind.CX_UO_AddrOf)
+						{
+							str = "&mut ";
+						}
+
+						if (type == CX_UnaryOperatorKind.CX_UO_Deref)
+						{
+							str = "*";
+						}
+
+						if (type == CX_UnaryOperatorKind.CX_UO_PreInc || type == CX_UnaryOperatorKind.CX_UO_PostInc)
+						{
+							if (a.IsPointer)
+							{
+								return "(" + a.Expression + " = " + a.Expression + ".offset(1))";
+							}
+
+							return a.Expression + " += 1";
+						}
+
+						if (type == CX_UnaryOperatorKind.CX_UO_PreDec || type == CX_UnaryOperatorKind.CX_UO_PostDec)
+						{
+							return a.Expression + " -= 1";
+						}
+
+						if (type == CX_UnaryOperatorKind.CX_UO_Not)
+						{
+							str = "!";
+						}
 
 						var left = type.IsUnaryOperatorPre();
 						if (left)
@@ -458,7 +524,7 @@ namespace Hebron.Rust
 							{
 								if (AppendBoolToInt(child.Info, ref ret))
 								{
-									return "return " + ret;
+									return "return " + ret.ApplyCast("i32");
 								}
 
 								return "return " + ret.ApplyCast(ToRustString(tt));
@@ -467,7 +533,7 @@ namespace Hebron.Rust
 
 						if (tt.IsPointer && ret.Deparentize() == "0")
 						{
-							ret = "null";
+							ret = "std::ptr::null_mut()";
 						}
 
 						var exp = string.IsNullOrEmpty(ret) ? "return" : "return " + ret;
@@ -484,14 +550,14 @@ namespace Hebron.Rust
 
 						if (executionExpr != null && !string.IsNullOrEmpty(executionExpr.Expression))
 						{
-							executionExpr.Expression = executionExpr.Expression.EnsureStatementFinished();
+							executionExpr.Expression = executionExpr.Expression.EnsureStatementFinished().Curlize();
 						}
 
-						var expr = "if (" + conditionExpr.Expression + ") " + executionExpr.Expression;
+						var expr = "if " + conditionExpr.Expression + " " + executionExpr.Expression;
 
 						if (elseExpr != null)
 						{
-							expr += " else " + elseExpr.Expression;
+							expr += " else " + elseExpr.Expression.EnsureStatementFinished().Curlize();
 						}
 
 						return expr;
@@ -657,10 +723,6 @@ namespace Hebron.Rust
 						var a = ProcessChildByIndex(info, 0);
 
 						var op = ".";
-						if (a.Expression != "this" && a.IsPointer)
-						{
-							op = "->";
-						}
 
 						var result = a.Expression + op + info.Spelling.FixSpecialWords();
 
@@ -867,7 +929,7 @@ namespace Hebron.Rust
 
 						if (!typeInfo.IsPointer && rustType != expr.RustType)
 						{
-							expr.Expression += " as " + rustType;
+							expr.Expression = expr.Expression.ApplyCast(rustType);
 						}
 
 						return expr.Expression;

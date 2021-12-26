@@ -32,16 +32,10 @@ namespace Hebron.Rust
 			var lastCast = string.Empty;
 			var dexpr = expr.Deparentize();
 
-			var m = Regex.Match(dexpr, @"^\((\w+)\)(\(.+\))$");
+			var m = Regex.Match(dexpr, @"^(.+)\s*as\s*(\w+)$");
 			if (m.Success)
 			{
-				lastCast = m.Groups[1].Value;
-				var val = m.Groups[2].Value;
-
-				if (!val.CorrectlyParentized())
-				{
-					lastCast = string.Empty;
-				}
+				lastCast = m.Groups[2].Value;
 			}
 
 			if (!string.IsNullOrEmpty(lastCast) && string.CompareOrdinal(lastCast, type) == 0)
@@ -49,7 +43,7 @@ namespace Hebron.Rust
 				return expr;
 			}
 
-			return type.Parentize() + expr.Parentize();
+			return expr.Parentize() + " as " + type;
 		}
 
 		internal static string GetExpression(this CursorProcessResult cursorProcessResult)

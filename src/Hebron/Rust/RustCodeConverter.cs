@@ -34,7 +34,7 @@ namespace Hebron.Rust
 			ConvertEnums();
 			ConvertStructs();
 			ConvertGlobalVariables();
-//			ConvertFunctions();
+			ConvertFunctions();
 
 			return Result;
 		}

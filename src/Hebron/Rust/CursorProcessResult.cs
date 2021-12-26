@@ -19,6 +19,8 @@ namespace Hebron.Rust
 
 		public bool IsArray => _typeInfo.IsArray;
 
+		public bool IsPrimitiveNumericType => _typeInfo.IsPrimitiveNumericType();
+
 		public string RustType => _rustType;
 
 		public CursorProcessResult(RustCodeConverter codeConverter, Cursor cursor)
