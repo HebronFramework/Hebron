@@ -10,6 +10,8 @@ namespace Hebron.Rust
 {
 	partial class RustCodeConverter
 	{
+		private const string NullPtr = "std::ptr::null_mut()";
+
 		private class FieldInfo
 		{
 			public string Name;
@@ -20,6 +22,9 @@ namespace Hebron.Rust
 		private List<FieldInfo> _currentStructInfo;
 		private readonly Dictionary<string, string> _localVariablesMap = new Dictionary<string, string>();
 		private IndentedStringWriter _writer = new IndentedStringWriter();
+		private int _switchCount;
+		private bool _insideSwitch;
+		private string _switchExpression;
 
 		private void ResetWriter() => _writer = new IndentedStringWriter();
 
@@ -145,7 +150,7 @@ namespace Hebron.Rust
 			{
 				if (typeInfo.IsPointer)
 				{
-					right = "std::ptr::null_mut()";
+					right = NullPtr;
 				}
 				else
 				{
@@ -198,7 +203,7 @@ namespace Hebron.Rust
 				{
 					if (type == CX_UnaryOperatorKind.CX_UO_LNot)
 					{
-						crp.Expression = child.Expression + "== null";
+						crp.Expression = child.Expression + "== " + NullPtr;
 					}
 
 					return;
@@ -233,7 +238,7 @@ namespace Hebron.Rust
 
 			if (crp.IsPointer)
 			{
-				crp.Expression = crp.Expression.Parentize() + " != null";
+				crp.Expression = crp.Expression.Parentize() + " != " + NullPtr;
 			}
 		}
 
@@ -257,7 +262,6 @@ namespace Hebron.Rust
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
 				clangsharp.Cursor_getBinaryOpcode(info.Handle).IsLogicalBooleanOperator())
 			{
-				expression = "(" + expression + "?1:0)";
 				return true;
 			}
 			else if (info.CursorKind == CXCursorKind.CXCursor_ParenExpr)
@@ -267,7 +271,6 @@ namespace Hebron.Rust
 					child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
 					clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsLogicalBooleanOperator())
 				{
-					expression = "(" + expression + "?1:0)";
 					return true;
 				}
 			}
@@ -348,18 +351,6 @@ namespace Hebron.Rust
 						var b = ProcessChildByIndex(info, 1);
 						var type = clangsharp.Cursor_getBinaryOpcode(info.Handle);
 
-						if (type.IsLogicalBinaryOperator())
-						{
-							AppendNonZeroCheck(a);
-							AppendNonZeroCheck(b);
-						}
-
-						if (type.IsLogicalBooleanOperator())
-						{
-							a.Expression = a.Expression.Parentize();
-							b.Expression = b.Expression.Parentize();
-						}
-
 						if (type.IsAssign() && type != CX_BinaryOperatorKind.CX_BO_ShlAssign && type != CX_BinaryOperatorKind.CX_BO_ShrAssign)
 						{
 							var typeInfo = info.ToTypeInfo();
@@ -405,7 +396,7 @@ namespace Hebron.Rust
 						if (a.IsPointer && (type == CX_BinaryOperatorKind.CX_BO_Assign || type.IsBooleanOperator()) &&
 							(b.Expression.Deparentize() == "0"))
 						{
-							b.Expression = "std::ptr::null_mut()";
+							b.Expression = NullPtr;
 						}
 
 						if (a.IsPointer && b.IsPointer && type == CX_BinaryOperatorKind.CX_BO_Sub)
@@ -496,7 +487,7 @@ namespace Hebron.Rust
 							}
 							else if (argExpr.Expression.Deparentize() == "0")
 							{
-								argExpr.Expression = "null";
+								argExpr.Expression = NullPtr;
 							}
 
 							args.Add(argExpr.Expression);
@@ -533,7 +524,7 @@ namespace Hebron.Rust
 
 						if (tt.IsPointer && ret.Deparentize() == "0")
 						{
-							ret = "std::ptr::null_mut()";
+							ret = NullPtr;
 						}
 
 						var exp = string.IsNullOrEmpty(ret) ? "return" : "return " + ret;
@@ -612,38 +603,95 @@ namespace Hebron.Rust
 						var executionExpr = ReplaceCommas(execution);
 						executionExpr = executionExpr.EnsureStatementFinished();
 
-						var sci = start.GetExpression().EnsureStatementEndWithSemicolon() + condition.GetExpression().EnsureStatementEndWithSemicolon() + it.GetExpression();
-						return "for (" + sci + ") " +
-								executionExpr.Curlize();
+						var startExpr = start.GetExpression().Replace(",", ";");
+						var condExpr = condition.GetExpression();
+						var itExpr = it.GetExpression().Replace(",", ";");
+
+						if (string.IsNullOrEmpty(condExpr))
+						{
+							condExpr = "true";
+						}
+
+						if (execution.Info.CursorKind == CXCursorKind.CXCursor_CompoundStmt)
+						{
+							var openingBracketIndex = executionExpr.LastIndexOf('}');
+
+							if (openingBracketIndex != -1)
+							{
+								executionExpr = executionExpr.Substring(0, openingBracketIndex) + itExpr.EnsureStatementFinished() + "}";
+
+								return startExpr + ";" + Environment.NewLine + "while (" + condExpr + ") " + executionExpr;
+							}
+						}
+
+						return startExpr + ";" + Environment.NewLine + "while (" + condExpr + ") {" +
+							   executionExpr + itExpr.EnsureStatementFinished() + "}";
 					}
 
 				case CXCursorKind.CXCursor_CaseStmt:
 					{
 						var expr = ProcessChildByIndex(info, 0);
 						var execution = ProcessChildByIndex(info, 1);
-						return "case " + expr.Expression + ":" + execution.Expression;
+						var s2 = "if ";
+
+						if (_switchCount > 0)
+						{
+							s2 = "} else " + s2;
+						}
+
+						++_switchCount;
+
+						return s2 + _switchExpression + " == " + expr.Expression + " {" + execution.Expression;
 					}
 
 				case CXCursorKind.CXCursor_DefaultStmt:
 					{
 						var execution = ProcessChildByIndex(info, 0);
-						return "default: " + execution.Expression;
+
+						var s2 = "else { ";
+						if (_switchCount > 0)
+						{
+							s2 = "} " + s2;
+						}
+
+						++_switchCount;
+
+						return s2 + execution.Expression;
 					}
 
 				case CXCursorKind.CXCursor_SwitchStmt:
 					{
-						var expr = ProcessChildByIndex(info, 0);
+						_insideSwitch = true;
+						_switchCount = 0;
+						_switchExpression = ProcessChildByIndex(info, 0).Expression;
 						var execution = ProcessChildByIndex(info, 1);
-						return "switch (" + expr.Expression + ")" + execution.Expression;
+
+						_insideSwitch = false;
+						return execution.Expression + "}";
 					}
 
 				case CXCursorKind.CXCursor_DoStmt:
 					{
 						var execution = ProcessChildByIndex(info, 0);
 						var expr = ProcessChildByIndex(info, 1);
+
 						AppendNonZeroCheck(expr);
 
-						return "do " + execution.Expression.EnsureStatementFinished() + " while (" + expr.Expression + ")";
+						var exeuctionExpr = execution.Expression.EnsureStatementFinished();
+
+						var breakExpr = "if !(" + expr.Expression + ") {break;}";
+
+						if (execution.Info.CursorKind == CXCursorKind.CXCursor_CompoundStmt)
+						{
+							var closingBracketIndex = exeuctionExpr.LastIndexOf("}");
+							if (closingBracketIndex != -1)
+							{
+								return "while(true) " + exeuctionExpr.Substring(0, closingBracketIndex) +
+									breakExpr + exeuctionExpr.Substring(closingBracketIndex);
+							}
+						}
+
+						return "while(true) {" + execution.Expression.EnsureStatementFinished() + breakExpr + "}";
 					}
 
 				case CXCursorKind.CXCursor_WhileStmt:
@@ -715,7 +763,7 @@ namespace Hebron.Rust
 							}
 						}
 
-						return condition.Expression + "?" + a.Expression + ":" + b.Expression;
+						return "if " + condition.Expression + "{" + a.Expression + "} else {" + b.Expression + "}";
 					}
 
 				case CXCursorKind.CXCursor_MemberRefExpr:
@@ -724,19 +772,25 @@ namespace Hebron.Rust
 
 						var op = ".";
 
+						if (a.Info.CursorKind == CXCursorKind.CXCursor_UnexposedExpr)
+						{
+							a.Expression = ("*" + a.Expression).Parentize();
+						}
+
 						var result = a.Expression + op + info.Spelling.FixSpecialWords();
 
 						return result;
 					}
 
 				case CXCursorKind.CXCursor_IntegerLiteral:
+					{
+						var result = info.GetLiteralString();
+						return result.Replace("U", string.Empty).Replace("u", string.Empty);
+					}
 				case CXCursorKind.CXCursor_FloatingLiteral:
 					{
 						var result = info.GetLiteralString();
-						if (info.Handle.Kind == CXCursorKind.CXCursor_FloatingLiteral)
-						{
-							result += "32";
-						}
+						result += "32";
 
 						return result;
 					}
@@ -789,7 +843,7 @@ namespace Hebron.Rust
 				case CXCursorKind.CXCursor_CompoundStmt:
 					{
 						var sb = new StringBuilder();
-						sb.Append("{\n");
+						sb.Append("{" + Environment.NewLine);
 
 						var size = info.CursorChildren.Count;
 						for (var i = 0; i < size; ++i)
@@ -799,7 +853,7 @@ namespace Hebron.Rust
 							sb.Append(exp.Expression);
 						}
 
-						sb.Append("}\n");
+						sb.Append("}" + Environment.NewLine);
 
 						var fullExp = sb.ToString();
 
@@ -811,7 +865,12 @@ namespace Hebron.Rust
 						var var = ProcessChildByIndex(info, 0);
 						var expr = ProcessChildByIndex(info, 1);
 
-						return var.Expression + "[" + expr.Expression + "]";
+						if (!var.IsArray)
+						{
+							return "*" + var.Expression + ".offset((" + expr.Expression + ") as isize)";
+						}
+
+						return var.Expression + "[(" + expr.Expression + ") as usize]";
 					}
 
 				case CXCursorKind.CXCursor_InitListExpr:
@@ -869,11 +928,11 @@ namespace Hebron.Rust
 						var expr = ProcessPossibleChildByIndex(info, 0);
 						var e = expr.GetExpression();
 						var tt = info.ToTypeInfo();
-						var csType = ToRustString(tt);
+						var rustType = ToRustString(tt);
 
-						if (csType != expr.RustType)
+						if (rustType != expr.RustType)
 						{
-							e = e.ApplyCast(csType);
+							e = e.ApplyCast(rustType);
 						} else
 						{
 							e = e.Parentize();
@@ -883,6 +942,10 @@ namespace Hebron.Rust
 					}
 
 				case CXCursorKind.CXCursor_BreakStmt:
+					if (_insideSwitch)
+					{
+						return ",";
+					}
 					return "break";
 				case CXCursorKind.CXCursor_ContinueStmt:
 					return "continue";
@@ -894,15 +957,15 @@ namespace Hebron.Rust
 
 						var expr = child.Expression;
 						var tt = info.ToTypeInfo();
-						var csType = ToRustString(tt);
+						var rustType = ToRustString(tt);
 
 						if (expr == "0" && tt.IsPointer)
 						{
 							// null
-						} else if (csType != child.RustType)
+						} else if (rustType != child.RustType)
 						{
 							// cast
-							expr = expr.ApplyCast(csType);
+							expr = expr.ApplyCast(rustType);
 						}
 
 						return expr;
@@ -924,7 +987,12 @@ namespace Hebron.Rust
 						var rustType = ToRustString(typeInfo);
 						if (typeInfo.IsPointer && expr.Expression.Deparentize() == "0")
 						{
-							expr.Expression = "null";
+							expr.Expression = NullPtr;
+						}
+
+						if (typeInfo.IsPointer && expr.IsArray)
+						{
+							expr.Expression += ".as_mut_ptr()";
 						}
 
 						if (!typeInfo.IsPointer && rustType != expr.RustType)
