@@ -9,7 +9,9 @@ namespace Hebron.Rust
 	{
 		private static readonly HashSet<string> _specialWords = new HashSet<string>(new[]
 		{
-			"type"
+			"type",
+			"in",
+			"final",
 		});
 
 		public static string FixSpecialWords(this string name)
@@ -32,7 +34,7 @@ namespace Hebron.Rust
 			var lastCast = string.Empty;
 			var dexpr = expr.Deparentize();
 
-			var m = Regex.Match(dexpr, @"^(.+)\s*as\s*(\w+)$");
+			var m = Regex.Match(dexpr, @"(.+)\s*as\s*(\w+)");
 			if (m.Success)
 			{
 				lastCast = m.Groups[2].Value;
@@ -43,7 +45,7 @@ namespace Hebron.Rust
 				return expr;
 			}
 
-			return expr.Parentize() + " as " + type;
+			return (expr.Parentize() + " as " + type).Parentize();
 		}
 
 		internal static string GetExpression(this CursorProcessResult cursorProcessResult)
@@ -132,7 +134,40 @@ namespace Hebron.Rust
 
 		public static string SizeOfExpr(this string type)
 		{
-			return "std::mem::size_of::<" + type + ">()";
+			return "std::mem::size_of::<" + type + ">() as u64";
+		}
+
+		public static string ToRustTypeName(this string type)
+		{
+			switch(type)
+			{
+				case "bool":
+					return "bool";
+				case "unsigned char":
+					return "u8";
+				case "char":
+					return "i8";
+				case "unsigned short":
+					return "u16";
+				case "short":
+					return "i16";
+				case "float":
+					return "f32";
+				case "double":
+					return "f64";
+				case "int":
+				case "long":
+					return "i32";
+				case "unsigned int":
+				case "unsigned long":
+					return "u32";
+				case "long long":
+					return "i64";
+				case "unsigned long long":
+					return "u64";
+			}
+
+			return type;
 		}
 	}
 }
