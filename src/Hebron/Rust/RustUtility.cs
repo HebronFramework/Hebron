@@ -55,7 +55,7 @@ namespace Hebron.Rust
 		{
 			if (functionName.IsNativeFunctionName())
 			{
-				return "CRuntime." + functionName;
+				return "c_runtime::" + functionName;
 			}
 
 			return functionName;
@@ -128,6 +128,11 @@ namespace Hebron.Rust
 			}
 
 			return GetDefaltValue(type.TypeDescriptor);
+		}
+
+		public static string SizeOfExpr(this string type)
+		{
+			return "std::mem::size_of::<" + type + ">()";
 		}
 	}
 }

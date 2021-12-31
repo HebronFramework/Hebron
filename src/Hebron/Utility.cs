@@ -653,11 +653,6 @@ namespace Hebron
 		{
 			var trimmed = statement.Trim();
 
-			if (string.IsNullOrEmpty(trimmed))
-			{
-				return ";";
-			}
-
 			if (!trimmed.EndsWith(";"))
 			{
 				return statement + ";";
