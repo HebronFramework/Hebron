@@ -9,5 +9,12 @@
 	public class RoslynConversionParameters: BaseConversionParameters
 	{
 		public UnsafeArrayUsage GlobalVariablesUnsafeArrayUsage;
+
+		public string[] Classes { get; set; }
+
+		public RoslynConversionParameters()
+		{
+			Classes = new string[0];
+		}
 	}
 }

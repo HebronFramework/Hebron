@@ -28,6 +28,11 @@ namespace Hebron.Roslyn
 			Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
 			TranslationUnit = Utility.Compile(parameters.InputPath, parameters.Defines);
 			Result = new RoslynConversionResult();
+
+			foreach(var cls in parameters.Classes)
+			{
+				Classes.Add(cls);
+			}
 		}
 
 		internal bool IsClass(string name) => Classes.Contains(name);

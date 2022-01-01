@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Globalization;
 using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -35,7 +36,13 @@ namespace Hebron.Roslyn
 					{
 						if (child.CursorChildren.Count > 0)
 						{
-							value = int.Parse(child.CursorChildren[0].GetLiteralString());
+							var str = child.CursorChildren[0].GetLiteralString();
+							if (str.StartsWith("0x"))
+							{
+								value = int.Parse(str.Substring(2), NumberStyles.HexNumber);
+							} else {
+								value = int.Parse(str);
+							}
 						}
 
 						var assignmentExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(value));

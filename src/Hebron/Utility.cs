@@ -699,6 +699,15 @@ namespace Hebron
 			"memcpy",
 			"_lrotl",
 			"ldexp",
+			"fabs",
+			"fmod",
+			"strlen",
+			"sqrt",
+			"cos",
+			"sin",
+			"acos",
+			"floor",
+			"ceil",
 		};
 
 		public static bool IsNativeFunctionName(this string name) => NativeFunctions.Contains(name);

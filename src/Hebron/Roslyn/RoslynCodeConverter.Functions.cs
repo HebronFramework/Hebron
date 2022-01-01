@@ -638,8 +638,8 @@ namespace Hebron.Roslyn
 								execution = ProcessChildByIndex(info, 0);
 								break;
 							case 2:
-								start = ProcessChildByIndex(info, 0);
-								condition = ProcessChildByIndex(info, 1);
+								it = ProcessChildByIndex(info, 0);
+								execution = ProcessChildByIndex(info, 1);
 								break;
 							case 3:
 								var expr = ProcessChildByIndex(info, 0);
