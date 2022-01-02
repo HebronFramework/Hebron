@@ -1,5 +1,6 @@
 ﻿using ClangSharp;
 using System;
+using System.Globalization;
 
 namespace Hebron.Rust
 {
@@ -28,7 +29,15 @@ namespace Hebron.Rust
 					var name = child.Spelling;
 					if (child.CursorChildren.Count > 0)
 					{
-						value = int.Parse(child.CursorChildren[0].GetLiteralString());
+						var str = child.CursorChildren[0].GetLiteralString();
+						if (str.StartsWith("0x"))
+						{
+							value = int.Parse(str.Substring(2), NumberStyles.HexNumber);
+						}
+						else
+						{
+							value = int.Parse(str);
+						}
 					}
 
 					var expr = "pub const " + name + ": i32 = " + value + ";" + Environment.NewLine;

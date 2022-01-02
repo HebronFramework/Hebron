@@ -145,8 +145,10 @@ namespace Hebron.Rust
 			}
 			else
 			{
-				sb.Append(new string('*', type.PointerCount));
-				sb.Append("mut ");
+				for(var i = 0; i < type.PointerCount; ++i)
+				{
+					sb.Append("*mut ");
+				}
 
 				if (typeName == "void")
 				{
