@@ -81,9 +81,9 @@ namespace Hebron.Rust
 					case PrimitiveType.Short:
 						return "0";
 					case PrimitiveType.Float:
-						return "0";
+						return "0.0f32";
 					case PrimitiveType.Double:
-						return "0";
+						return "0.0f64";
 					case PrimitiveType.Int:
 						return "0";
 					case PrimitiveType.Uint:

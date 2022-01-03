@@ -711,5 +711,35 @@ namespace Hebron
 		};
 
 		public static bool IsNativeFunctionName(this string name) => NativeFunctions.Contains(name);
+
+		public static bool IsCaseStatement(Cursor parent0, Cursor parent1)
+		{
+			if (parent0 == null)
+			{
+				return false;
+			}
+
+			if (parent0.CursorKind == CXCursorKind.CXCursor_CaseStmt ||
+				parent0.CursorKind == CXCursorKind.CXCursor_DefaultStmt)
+			{
+				// First parent is case statement
+				return true;
+			}
+
+			if (parent1 == null)
+			{
+				return false;
+			}
+
+			if (parent0.CursorKind == CXCursorKind.CXCursor_CompoundStmt &&
+				(parent1.CursorKind == CXCursorKind.CXCursor_CaseStmt ||
+				parent1.CursorKind == CXCursorKind.CXCursor_DefaultStmt ||
+				parent1.CursorKind == CXCursorKind.CXCursor_SwitchStmt))
+			{
+				return true;
+			}
+
+			return false;
+		}
 	}
 }

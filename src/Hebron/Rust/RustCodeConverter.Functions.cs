@@ -18,14 +18,20 @@ namespace Hebron.Rust
 			public Type Type;
 		}
 
+		private class SwitchInfo
+		{
+			public string Expression;
+			public bool Started;
+			public bool LastCaseHasBreak;
+		}
+
 		private FunctionDecl _functionDecl;
 		private List<FieldInfo> _currentStructInfo;
 		private readonly Dictionary<string, string> _localVariablesMap = new Dictionary<string, string>();
 		private IndentedStringWriter _writer = new IndentedStringWriter();
-		private int _switchCount;
-		private bool _insideSwitch;
-		private string _switchExpression;
+		private readonly Stack<SwitchInfo> _switches = new Stack<SwitchInfo>();
 		private int _hebronTmpIndex = 0;
+		private readonly List<Cursor> _parents = new List<Cursor>();
 
 		private void ResetWriter() => _writer = new IndentedStringWriter();
 
@@ -107,7 +113,10 @@ namespace Hebron.Rust
 				_writer.IndentedWriteLine("}");
 
 
-				Result.Functions[cursor.Spelling] = _writer.ToString();
+				var funcResult = _writer.ToString();
+				funcResult = funcResult.Replace(".as_mut_ptr()[", "[");
+
+				Result.Functions[cursor.Spelling] = funcResult;
 			}
 		}
 
@@ -337,13 +346,13 @@ namespace Hebron.Rust
 							{
 								if (expr.TypeInfo.ConstantArraySizes.Length > 1)
 								{
-									throw new Exception(string.Format("sizeof for arrays with {0} dimensions isn't supported.", 
+									throw new Exception(string.Format("sizeof for arrays with {0} dimensions isn't supported.",
 										expr.TypeInfo.ConstantArraySizes.Length));
 								}
 
 								if (expr.TypeInfo.ConstantArraySizes.Length == 1)
 								{
-									return expr.TypeInfo.ConstantArraySizes[0] + " * " +ToRustTypeName(expr.TypeInfo).SizeOfExpr();
+									return expr.TypeInfo.ConstantArraySizes[0] + " * " + ToRustTypeName(expr.TypeInfo).SizeOfExpr();
 								}
 
 								return expr.RustType.SizeOfExpr();
@@ -578,8 +587,8 @@ namespace Hebron.Rust
 									} else
 									{
 										var subChild = ProcessPossibleChildByIndex(child.Info, 0);
-										if (subChild != null && 
-											subChild.Info.CursorKind == CXCursorKind.CXCursor_DeclRefExpr && 
+										if (subChild != null &&
+											subChild.Info.CursorKind == CXCursorKind.CXCursor_DeclRefExpr &&
 											argExpr.RustType != subChild.RustType)
 										{
 											argExpr.Expression = argExpr.Expression.ApplyCast(argExpr.RustType);
@@ -601,8 +610,12 @@ namespace Hebron.Rust
 					}
 				case CXCursorKind.CXCursor_ReturnStmt:
 					{
-						var child = ProcessPossibleChildByIndex(info, 0);
+						if (Utility.IsCaseStatement(GetParent(0), GetParent(1)))
+						{
+							_switches.Peek().LastCaseHasBreak = true;
+						}
 
+						var child = ProcessPossibleChildByIndex(info, 0);
 						var ret = child.GetExpression();
 
 						var tt = _functionDecl.ReturnType.ToTypeInfo();
@@ -727,49 +740,98 @@ namespace Hebron.Rust
 
 				case CXCursorKind.CXCursor_CaseStmt:
 					{
-						if (_functionDecl.Name == "stbtt_InitFont_internal")
+						var exprs = new List<CursorProcessResult>();
+						var lastCursor = info;
+						while (lastCursor.CursorKind == CXCursorKind.CXCursor_CaseStmt)
 						{
-							var k = 5;
+							var expr = ProcessChildByIndex(lastCursor, 0);
+							exprs.Add(expr);
+
+							lastCursor = lastCursor.CursorChildren[1];
 						}
 
-						var expr = ProcessChildByIndex(info, 0);
-						var execution = ProcessChildByIndex(info, 1);
 						var s2 = "if ";
 
-						if (_switchCount > 0)
+						SwitchInfo switchInfo = _switches.Peek();
+						if (switchInfo.Started)
 						{
-							s2 = "} else " + s2;
+							if (!switchInfo.LastCaseHasBreak)
+							{
+								// No break statement
+								s2 = "NO_BREAK_STATEMENT(); } else " + s2;
+							} else
+							{
+								s2 = "} else " + s2;
+							}
 						}
 
-						++_switchCount;
+						switchInfo.Started = true;
+						switchInfo.LastCaseHasBreak = false;
 
-						return s2 + _switchExpression + " == " + expr.Expression + " {" + execution.Expression;
+						var sb = new StringBuilder();
+						for (var i = 0; i < exprs.Count; ++i)
+						{
+							sb.Append(switchInfo.Expression + " == " + exprs[i].Expression);
+							if (i < exprs.Count - 1)
+							{
+								sb.Append("||");
+							}
+						}
+
+						var execution = Process(lastCursor).Expression.Decurlize();
+
+						return s2 + sb.ToString() + " {" + execution;
 					}
 
 				case CXCursorKind.CXCursor_DefaultStmt:
 					{
-						var execution = ProcessChildByIndex(info, 0);
-
 						var s2 = "else { ";
-						if (_switchCount > 0)
+						SwitchInfo switchInfo = _switches.Peek();
+						if (switchInfo.Started)
 						{
-							s2 = "} " + s2;
+							if (!switchInfo.LastCaseHasBreak)
+							{
+								s2 = "NO_BREAK_STATEMENT(); } " + s2;
+							}
+							else
+							{
+								s2 = "} " + s2;
+							}
 						}
 
-						++_switchCount;
+						switchInfo.Started = true;
+						switchInfo.LastCaseHasBreak = false;
 
-						return s2 + execution.Expression;
+						var execution = ProcessChildByIndex(info, 0).Expression.Decurlize();
+
+						return s2 + execution;
 					}
 
 				case CXCursorKind.CXCursor_SwitchStmt:
 					{
-						_insideSwitch = true;
-						_switchCount = 0;
-						_switchExpression = ProcessChildByIndex(info, 0).Expression;
-						var execution = ProcessChildByIndex(info, 1);
+						var switchInfo = new SwitchInfo
+						{
+							Expression = ProcessChildByIndex(info, 0).Expression,
+							Started = false,
+							LastCaseHasBreak = true
+						};
 
-						_insideSwitch = false;
-						return execution.Expression + "}";
+						_switches.Push(switchInfo);
+
+						var result = Process(info.CursorChildren[1]).Expression.Decurlize();
+
+						if (!switchInfo.LastCaseHasBreak)
+						{
+							// No break statement
+							result += "NO_BREAK_STATEMENT(); } ";
+						} else
+						{
+							result += "}";
+						}
+
+						_switches.Pop();
+
+						return result;
 					}
 
 				case CXCursorKind.CXCursor_DoStmt:
@@ -872,14 +934,17 @@ namespace Hebron.Rust
 					{
 						var a = ProcessChildByIndex(info, 0);
 
-						var op = ".";
-
 						if (a.Info.CursorKind == CXCursorKind.CXCursor_UnexposedExpr)
 						{
-							a.Expression = ("*" + a.Expression).Parentize();
+							a.Expression = "*" + a.Expression;
 						}
 
-						var result = a.Expression + op + info.Spelling.FixSpecialWords();
+						if (a.Expression.StartsWith("*"))
+						{
+							a.Expression = a.Expression.Parentize();
+						}
+
+						var result = a.Expression + "." + info.Spelling.FixSpecialWords();
 
 						return result;
 					}
@@ -915,7 +980,7 @@ namespace Hebron.Rust
 						string name;
 						var expr = ProcessDeclaration(varDecl, out name);
 
-						if (_state == State.Functions && 
+						if (_state == State.Functions &&
 							varDecl.StorageClass == CX_StorageClass.CX_SC_Static)
 						{
 							_localVariablesMap[varDecl.Spelling.FixSpecialWords()] = name;
@@ -944,25 +1009,23 @@ namespace Hebron.Rust
 				case CXCursorKind.CXCursor_CompoundStmt:
 					{
 						var sb = new StringBuilder();
-						sb.Append("{" + Environment.NewLine);
-
-						var size = info.CursorChildren.Count;
-						for (var i = 0; i < size; ++i)
+						for (var i = 0; i < info.CursorChildren.Count; ++i)
 						{
 							var exp = ProcessChildByIndex(info, i);
 							exp.Expression = exp.Expression.EnsureStatementFinished();
 							sb.Append(exp.Expression);
 						}
 
-						sb.Append("}" + Environment.NewLine);
-
-						var fullExp = sb.ToString();
-
-						return fullExp;
+						return sb.ToString().Curlize();
 					}
 
 				case CXCursorKind.CXCursor_ArraySubscriptExpr:
 					{
+						if (_functionDecl.Spelling == "stbtt__run_charstring")
+						{
+							var k = 5;
+						}
+
 						var var = ProcessChildByIndex(info, 0);
 						var expr = ProcessChildByIndex(info, 1);
 
@@ -1048,11 +1111,15 @@ namespace Hebron.Rust
 					}
 
 				case CXCursorKind.CXCursor_BreakStmt:
-					if (_insideSwitch)
 					{
-						return string.Empty;
+						if (Utility.IsCaseStatement(GetParent(0), GetParent(1)))
+						{
+							_switches.Peek().LastCaseHasBreak = true;
+							return string.Empty;
+						}
+
+						return "break";
 					}
-					return "break";
 				case CXCursorKind.CXCursor_ContinueStmt:
 					return "continue";
 
@@ -1132,9 +1199,24 @@ namespace Hebron.Rust
 			}
 		}
 
+		private Cursor GetParent(int depth)
+		{
+			var index = _parents.Count - depth - 2;
+			if (index < 0 || index >= _parents.Count)
+			{
+				return null;
+			}
+
+			return _parents[_parents.Count - depth - 2];
+		}
+
 		private CursorProcessResult Process(Cursor cursor)
 		{
+			_parents.Add(cursor);
+
 			var expr = InternalProcess(cursor);
+
+			_parents.Remove(cursor);
 
 			return new CursorProcessResult(this, cursor)
 			{
