@@ -708,6 +708,7 @@ namespace Hebron
 			"acos",
 			"floor",
 			"ceil",
+			"memmove",
 		};
 
 		public static bool IsNativeFunctionName(this string name) => NativeFunctions.Contains(name);

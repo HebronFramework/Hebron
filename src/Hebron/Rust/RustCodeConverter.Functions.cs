@@ -489,8 +489,8 @@ namespace Hebron.Rust
 
 						if (a.IsPointer && b.IsPointer && type == CX_BinaryOperatorKind.CX_BO_Sub)
 						{
-							a.Expression = a.Expression.ApplyCast("usize");
-							b.Expression = b.Expression.ApplyCast("usize");
+							a.Expression = a.Expression.ApplyCast("isize");
+							b.Expression = b.Expression.ApplyCast("isize");
 						}
 
 						if (a.IsPointer && type == CX_BinaryOperatorKind.CX_BO_AddAssign)

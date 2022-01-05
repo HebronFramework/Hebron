@@ -1,5 +1,6 @@
 ﻿using ClangSharp;
 using ClangSharp.Interop;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -69,7 +70,7 @@ namespace Hebron.Roslyn
 				foreach(var p in funcDecl.Parameters)
 				{
 					var name = p.Name.FixSpecialWords();
-					var csType = ToRoslynString(p.Type);
+					var csType = ToRoslynString(p.Type, true);
 					PushVariableInfo(name, csType);
 					md = md.AddParameterListParameters(Parameter(Identifier(name)).WithType(ParseTypeName(csType)));
 				}
@@ -132,6 +133,7 @@ namespace Hebron.Roslyn
 				{
 					var initListExpr = rvalue.Expression;
 					if (rvalue.Info.CursorChildren.Count == 1 &&
+						typeInfo.ConstantArraySizes.Length > 0 &&
 						typeInfo.ConstantArraySizes[0] > 1)
 					{
 						var sb = new StringBuilder();
@@ -828,7 +830,7 @@ namespace Hebron.Roslyn
 							_localVariablesMap[varDecl.Spelling.FixSpecialWords()] = name;
 
 							expr = "public static " + expr;
-//							Result.GlobalVariables[name] = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
+							Result.GlobalVariables[name] = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
 							return string.Empty;
 						}
 

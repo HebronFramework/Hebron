@@ -132,7 +132,7 @@ namespace Hebron.Rust
 				for (var i = 0; i < type.ConstantArraySizes.Length; ++i)
 				{
 					sb.Append(";");
-					sb.Append(type.ConstantArraySizes[i]);
+					sb.Append(type.ConstantArraySizes[type.ConstantArraySizes.Length - i - 1]);
 					sb.Append("]");
 				}
 

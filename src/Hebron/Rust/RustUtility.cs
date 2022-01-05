@@ -31,6 +31,12 @@ namespace Hebron.Rust
 				return expr;
 			}
 
+			if (type.StartsWith("["))
+			{
+				// Don't cast to array types
+				return expr;
+			}
+
 			var lastCast = string.Empty;
 			var dexpr = expr.Deparentize();
 
