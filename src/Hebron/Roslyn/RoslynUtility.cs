@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -17,6 +18,7 @@ namespace Hebron.Roslyn
 		public static DelegateDeclarationSyntax MakePublic(this DelegateDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
 
 		public static TypeDeclarationSyntax MakePublic(this TypeDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
+		public static TypeDeclarationSyntax MakeUnsafe(this TypeDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.UnsafeKeyword));
 
 		public static ConstructorDeclarationSyntax MakePublic(this ConstructorDeclarationSyntax decl) => decl.AddModifiers(Token(SyntaxKind.PublicKeyword));
 
@@ -27,7 +29,7 @@ namespace Hebron.Roslyn
 
 		private static readonly HashSet<string> _specialWords = new HashSet<string>(new[]
 		{
-			"out", "in", "base", "null", "string"
+			"out", "in", "base", "null", "string", "lock"
 		});
 
 		public static string FixSpecialWords(this string name)
@@ -83,6 +85,22 @@ namespace Hebron.Roslyn
 			}
 
 			return functionName;
+		}
+
+		public static string BuildArrayDimensionsString(this int[] dimensions)
+		{
+			var sb = new StringBuilder();
+			for (var i = 0; i < dimensions.Length; ++i)
+			{
+				sb.Append(dimensions[i]);
+
+				if (i < dimensions.Length - 1)
+				{
+					sb.Append(", ");
+				}
+			}
+
+			return sb.ToString();
 		}
 	}
 }

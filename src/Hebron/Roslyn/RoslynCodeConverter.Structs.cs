@@ -10,6 +10,9 @@ namespace Hebron.Roslyn
 {
 	partial class RoslynCodeConverter
 	{
+		private readonly List<string> TopTypes = new List<string>();
+		private int _unnamedCounter;
+
 		private bool CheckIsClass(string name, 
 			Dictionary<string, List<string>> dependencyTree,
 			HashSet<string> parsedNames)
@@ -41,9 +44,9 @@ namespace Hebron.Roslyn
 			return false;
 		}
 
-		private TypeDeclarationSyntax FillTypeDeclaration(Cursor cursor, string name, TypeDeclarationSyntax typeDecl)
+		private TypeDeclarationSyntax FillTypeDeclaration(Cursor cursor, string name, TypeDeclarationSyntax typeDecl, bool isUnion)
 		{
-			typeDecl = typeDecl.MakePublic();
+			typeDecl = typeDecl.MakePublic().MakeUnsafe();
 
 			var constructorStatements = new List<StatementSyntax>();
 			foreach (NamedDecl child in cursor.CursorChildren)
@@ -58,12 +61,41 @@ namespace Hebron.Roslyn
 				var childName = asField.Name.FixSpecialWords();
 				var typeInfo = asField.Type.ToTypeInfo();
 
-				if (typeInfo.TypeString.Contains("unnamed "))
+				if ((typeInfo.TypeDescriptor is StructTypeInfo && !TopTypes.Contains(typeInfo.TypeName)) ||
+					typeInfo.TypeString.Contains("unnamed "))
 				{
 					// unnamed struct
-					var subName = "unnamed1";
-					var subTypeDecl = (TypeDeclarationSyntax)StructDeclaration(subName);
-					subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl);
+					string subName;
+					if (typeInfo.TypeString.Contains("unnamed "))
+					{
+						// Unnamed subtype
+						subName = "unnamed" + (_unnamedCounter + 1);
+					} else
+					{
+						// Named subtype
+						subName = typeInfo.TypeName;
+					}
+					 
+					++_unnamedCounter;
+
+					var sb = new StringBuilder();
+
+					var subIsUnion = false;
+					if (asField.Type.AsString.Contains("union "))
+					{
+						subIsUnion = true;
+						subName = subName.Replace("union ", string.Empty); ;
+						sb.Append("[StructLayout(LayoutKind.Explicit)]");
+					}
+
+					sb.Append("struct ");
+					sb.Append(subName);
+					sb.Append(" {}");
+
+
+					var subTypeDecl = (TypeDeclarationSyntax)ParseMemberDeclaration(sb.ToString());
+
+					subTypeDecl = FillTypeDeclaration(child.CursorChildren[0], subName, subTypeDecl, subIsUnion);
 					typeDecl = typeDecl.AddMembers(subTypeDecl);
 
 					typeInfo = new TypeInfo(new StructTypeInfo(subName), typeInfo.PointerCount, typeInfo.ConstantArraySizes);
@@ -71,51 +103,59 @@ namespace Hebron.Roslyn
 
 				var typeName = ToRoslynTypeName(typeInfo);
 
-				FieldDeclarationSyntax fieldDecl = null;
+				string fieldDecl = null;
 
-				var isFixedField = !IsClass(name) && typeInfo.TypeDescriptor is PrimitiveTypeInfo &&
+				var isFixedField = !IsClass(name) && 
+					typeInfo.TypeDescriptor is PrimitiveTypeInfo &&
 					typeInfo.ConstantArraySizes.Length == 1;
 				if (isFixedField)
 				{
-					var expr = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
+					fieldDecl = "public fixed " + ToRoslynTypeName(typeInfo) + " " +
 						childName + "[" + typeInfo.ConstantArraySizes[0] + "];";
-
-					fieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
 				}
-				else
+				else if (!IsClass(typeInfo.TypeDescriptor.TypeName) ||
+					!typeInfo.IsArray)
 				{
-					var vd = VariableDeclarator(childName);
-					var variableDecl = VariableDeclaration(ParseTypeName(ToRoslynString(typeInfo, true))).AddVariables(vd);
+					fieldDecl = "public " + ToRoslynString(typeInfo, true) + " " + childName;
 
-					fieldDecl = FieldDeclaration(variableDecl).MakePublic();
-				}
-
-				if (typeInfo.ConstantArraySizes.Length > 0 && !isFixedField)
-				{
-					// Declare array field
-					var sb = new StringBuilder();
-					for(var i = 0; i < typeInfo.ConstantArraySizes.Length; ++i)
+					if (typeInfo.ConstantArraySizes.Length > 0)
 					{
-						sb.Append(typeInfo.ConstantArraySizes[i]);
+						// Declare array field
+						var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
+						var dimensions = typeInfo.ConstantArraySizes.BuildArrayDimensionsString();
+						var expr = "public " + arrayTypeName + " " + childName +
+							"Array = new " + arrayTypeName + "(" + dimensions + ");";
+						var arrayFieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
 
-						if (i < typeInfo.ConstantArraySizes.Length - 1)
-						{
-							sb.Append(", ");
-						}
+						var stmt = ParseStatement(childName + " = " + ToRoslynString(typeInfo).Parentize() + childName + "Array;");
+						constructorStatements.Add(stmt);
+
+						typeDecl = typeDecl.AddMembers(arrayFieldDecl);
 					}
+				} else
+				{
+					// Class array
+					var arrayTypeName = ToRoslynTypeName(typeInfo);
+					var dimensions = typeInfo.ConstantArraySizes.BuildArrayDimensionsString();
+					fieldDecl = "public " + arrayTypeName + "[] " + childName +
+						" = new " + arrayTypeName + "[" + dimensions + "];";
 
-					var arrayTypeName = BuildUnsafeArrayTypeName(typeInfo);
-					var expr = "public " + arrayTypeName + " " + childName +
-						"Array = new " + arrayTypeName + "(" + sb.ToString() + ");";
-					var arrayFieldDecl = (FieldDeclarationSyntax)ParseMemberDeclaration(expr);
-
-					var stmt = ParseStatement(childName + " = " + ToRoslynString(typeInfo).Parentize() + childName + "Array;");
+					var d = typeInfo.ConstantArraySizes[0];
+					var stmt = ParseStatement(
+						$"for (var i = 0; i < {d}; ++i) {{" +
+						$"	{childName}[i] = new {arrayTypeName}();" +
+						"}");
+						
 					constructorStatements.Add(stmt);
-
-					typeDecl = typeDecl.AddMembers(arrayFieldDecl);
 				}
 
-				typeDecl = typeDecl.AddMembers(fieldDecl);
+				if (isUnion)
+				{
+					fieldDecl = "[FieldOffset(0)]" + fieldDecl;
+				}
+
+				var fieldDecl2 = (FieldDeclarationSyntax)ParseMemberDeclaration(fieldDecl.EnsureStatementFinished());
+				typeDecl = typeDecl.AddMembers(fieldDecl2);
 			}
 
 			if (constructorStatements.Count > 0)
@@ -198,6 +238,8 @@ namespace Hebron.Roslyn
 						break;
 					}
 				}
+
+				TopTypes.Add(name);
 			}
 
 			// Second run - use dependency tree to determine which structs reference classes and mark it as classes too
@@ -220,6 +262,7 @@ namespace Hebron.Roslyn
 			// Third run - generate actual code
 			foreach (var cursor in TranslationUnit.EnumerateCursors())
 			{
+				_unnamedCounter = 0;
 				if (cursor.CursorKind != ClangSharp.Interop.CXCursorKind.CXCursor_StructDecl)
 				{
 					continue;
@@ -245,7 +288,7 @@ namespace Hebron.Roslyn
 					typeDecl = StructDeclaration(name);
 				}
 
-				typeDecl = FillTypeDeclaration(cursor, name, typeDecl);
+				typeDecl = FillTypeDeclaration(cursor, name, typeDecl, false);
 
 				Result.Structs[name] = typeDecl;
 			}

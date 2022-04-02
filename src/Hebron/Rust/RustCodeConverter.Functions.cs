@@ -1021,11 +1021,6 @@ namespace Hebron.Rust
 
 				case CXCursorKind.CXCursor_ArraySubscriptExpr:
 					{
-						if (_functionDecl.Spelling == "stbtt__run_charstring")
-						{
-							var k = 5;
-						}
-
 						var var = ProcessChildByIndex(info, 0);
 						var expr = ProcessChildByIndex(info, 1);
 

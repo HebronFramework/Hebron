@@ -25,7 +25,7 @@ namespace Hebron.Rust
 		private RustCodeConverter(RustConversionParameters parameters)
 		{
 			Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
-			TranslationUnit = Utility.Compile(parameters.InputPath, parameters.Defines);
+			TranslationUnit = Utility.Compile(parameters.InputPath, parameters.Defines, parameters.AdditionalIncludeDirectories);
 			Result = new RustConversionResult();
 		}
 

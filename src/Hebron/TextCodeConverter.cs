@@ -5,9 +5,9 @@ namespace Hebron
 {
 	public static class TextCodeConverter
 	{
-		public static string Convert(string inputPath, string[] defines)
+		public static string Convert(string inputPath, string[] defines, string[] additionalIncludeFolders)
 		{
-			var translationUnit = Utility.Compile(inputPath, defines);
+			var translationUnit = Utility.Compile(inputPath, defines, additionalIncludeFolders);
 
 			var writer = new IndentedStringWriter();
 			foreach (var cursor in translationUnit.EnumerateCursors())

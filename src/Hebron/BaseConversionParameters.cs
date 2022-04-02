@@ -18,6 +18,7 @@ namespace Hebron
 
 		public string InputPath { get; set; }
 		public string[] Defines { get; set; }
+		public string[] AdditionalIncludeDirectories { get; set; }
 
 		/// <summary>
 		/// Names of enums to skip
@@ -41,6 +42,7 @@ namespace Hebron
 		
 		public BaseConversionParameters()
 		{
+			AdditionalIncludeDirectories = new string[0];
 			Defines = new string[0];
 			SkipEnums = new string[0];
 			SkipStructs = new string[0];

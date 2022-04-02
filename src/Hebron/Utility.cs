@@ -171,7 +171,7 @@ namespace Hebron
 
 	internal static class Utility
 	{
-		public static unsafe TranslationUnit Compile(string inputPath, string[] defines)
+		public static unsafe TranslationUnit Compile(string inputPath, string[] defines, string[] additionalIncludeFolders)
 		{
 			if (string.IsNullOrEmpty(inputPath))
 			{
@@ -190,7 +190,11 @@ namespace Hebron
 				arr.Add("-D" + d);
 			}
 
-			//			arr.Add("-I" + @"D:\Develop\Microsoft Visual Studio 12.0\VC\include");
+			foreach (var i in additionalIncludeFolders)
+			{
+				var d = "-I\"" + i + "\"";
+				arr.Add(d);
+			}
 
 			var index = Index.Create();
 

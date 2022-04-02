@@ -67,7 +67,7 @@ namespace Hebron.Roslyn
 					.MakePublic()
 					.MakeStatic();
 
-				foreach(var p in funcDecl.Parameters)
+				foreach (var p in funcDecl.Parameters)
 				{
 					var name = p.Name.FixSpecialWords();
 					var csType = ToRoslynString(p.Type, true);
@@ -75,7 +75,7 @@ namespace Hebron.Roslyn
 					md = md.AddParameterListParameters(Parameter(Identifier(name)).WithType(ParseTypeName(csType)));
 				}
 
-				foreach(var child in funcDecl.Body.Children)
+				foreach (var child in funcDecl.Body.Children)
 				{
 					var result = Process(child);
 					if (result == null)
