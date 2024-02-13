@@ -203,7 +203,7 @@ namespace Hebron.Rust
 
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clang.getCursorBinaryOperatorKind(info.Handle);
+				var type = info.Handle.BinaryOperatorKind;
 				if (!type.IsBinaryOperator())
 				{
 					return;
@@ -215,7 +215,7 @@ namespace Hebron.Rust
 				var child2 = ProcessChildByIndex(info, 0);
 				if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 				{
-					var type = clang.getCursorBinaryOperatorKind(child2.Info.Handle);
+					var type = child2.Info.Handle.BinaryOperatorKind;
 					if (!type.IsBinaryOperator())
 					{
 						return;
@@ -226,7 +226,7 @@ namespace Hebron.Rust
 			if (info.CursorKind == CXCursorKind.CXCursor_UnaryOperator)
 			{
 				var child = ProcessChildByIndex(info, 0);
-				var type = clang.getCursorUnaryOperatorKind(info.Handle);
+				var type = info.Handle.UnaryOperatorKind;
 				if (child.IsPointer)
 				{
 					if (type == CXUnaryOperatorKind.CXUnaryOperator_LNot)
@@ -241,7 +241,7 @@ namespace Hebron.Rust
 				{
 					var child2 = ProcessChildByIndex(child.Info, 0);
 					if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-						clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsBinaryOperator())
+						child2.Info.Handle.BinaryOperatorKind.IsBinaryOperator())
 					{
 					}
 					else
@@ -288,7 +288,7 @@ namespace Hebron.Rust
 		private bool AppendBoolToInt(Cursor info, ref string expression)
 		{
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-				clang.getCursorBinaryOperatorKind(info.Handle).IsLogicalBooleanOperator())
+				info.Handle.BinaryOperatorKind.IsLogicalBooleanOperator())
 			{
 				expression = "if " + expression + "{ 1 } else { 0 }";
 				return true;
@@ -298,7 +298,7 @@ namespace Hebron.Rust
 				var child2 = ProcessPossibleChildByIndex(info, 0);
 				if (child2 != null &&
 					child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-					clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsLogicalBooleanOperator())
+					child2.Info.Handle.BinaryOperatorKind.IsLogicalBooleanOperator())
 				{
 					expression = "if " + expression + "{ 1 } else { 0 }";
 					return true;
@@ -328,7 +328,7 @@ namespace Hebron.Rust
 
 				case CXCursorKind.CXCursor_UnaryExpr:
 					{
-						var opCode = clang.getCursorUnaryOperatorKind(info.Handle);
+						var opCode = info.Handle.UnaryOperatorKind;
 						var expr = ProcessPossibleChildByIndex(info, 0);
 
 						string[] tokens = null;
@@ -392,7 +392,7 @@ namespace Hebron.Rust
 					{
 						var a = ProcessChildByIndex(info, 0);
 						var b = ProcessChildByIndex(info, 1);
-						var type = clang.getCursorBinaryOperatorKind(info.Handle);
+						var type = info.Handle.BinaryOperatorKind;
 
 						if (type.IsLogicalBinaryOperator())
 						{
@@ -405,7 +405,7 @@ namespace Hebron.Rust
 							// Check for multiple assigns per line
 							if (b.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 							{
-								var type2 = clang.getCursorBinaryOperatorKind(b.Info.Handle);
+								var type2 = b.Info.Handle.BinaryOperatorKind;
 								if (type2 == CXBinaryOperatorKind.CXBinaryOperator_Assign)
 								{
 									var lvalues = new List<string>();
@@ -420,7 +420,7 @@ namespace Hebron.Rust
 
 										b = ProcessChildByIndex(b.Info, 1);
 
-										type2 = clang.getCursorBinaryOperatorKind(b.Info.Handle);
+										type2 = b.Info.Handle.BinaryOperatorKind;
 									}
 
 									var sb = new StringBuilder();
@@ -450,7 +450,7 @@ namespace Hebron.Rust
 								{
 									var bb = ProcessChildByIndex(b.Info, 0);
 									if (bb.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-										clang.getCursorBinaryOperatorKind(bb.Info.Handle).IsLogicalBooleanOperator())
+										bb.Info.Handle.BinaryOperatorKind.IsLogicalBooleanOperator())
 									{
 										b = bb;
 									}
@@ -508,7 +508,7 @@ namespace Hebron.Rust
 					{
 						var a = ProcessChildByIndex(info, 0);
 
-						var type = clang.getCursorUnaryOperatorKind(info.Handle);
+						var type = info.Handle.UnaryOperatorKind;
 						var str = info.GetOperatorString();
 
 						if (type == CXUnaryOperatorKind.CXUnaryOperator_AddrOf)
@@ -680,7 +680,7 @@ namespace Hebron.Rust
 							case 3:
 								var expr = ProcessChildByIndex(info, 0);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
+									expr.Info.Handle.BinaryOperatorKind.IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -691,7 +691,7 @@ namespace Hebron.Rust
 
 								expr = ProcessChildByIndex(info, 1);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
+									expr.Info.Handle.BinaryOperatorKind.IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -910,7 +910,7 @@ namespace Hebron.Rust
 							}
 							else if (condition.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 							{
-								var op = clang.getCursorBinaryOperatorKind(condition.Info.Handle);
+								var op = condition.Info.Handle.BinaryOperatorKind;
 
 								if (op == CXBinaryOperatorKind.CXBinaryOperator_Or || op == CXBinaryOperatorKind.CXBinaryOperator_And)
 								{
@@ -1224,7 +1224,7 @@ namespace Hebron.Rust
 			var executionExpr = info.GetExpression();
 			if (info != null && info.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clang.getCursorBinaryOperatorKind(info.Info.Handle);
+				var type = info.Info.Handle.BinaryOperatorKind;
 				if (type == CXBinaryOperatorKind.CXBinaryOperator_Comma)
 				{
 					var a = ReplaceCommas(ProcessChildByIndex(info.Info, 0));

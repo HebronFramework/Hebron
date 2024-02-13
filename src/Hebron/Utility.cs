@@ -297,12 +297,12 @@ namespace Hebron
 			if (cursor.kind == CXCursorKind.CXCursor_BinaryOperator ||
 				cursor.kind == CXCursorKind.CXCursor_CompoundAssignOperator)
 			{
-				return clang.getBinaryOperatorKindSpelling(clang.getCursorBinaryOperatorKind(cursor)).CString;
+				return cursor.BinaryOperatorKindSpelling.CString;
 			}
 
 			if (cursor.kind == CXCursorKind.CXCursor_UnaryOperator)
 			{
-				return clang.getUnaryOperatorKindSpelling(clang.getCursorUnaryOperatorKind(cursor)).CString;
+				return cursor.UnaryOperatorKindSpelling.CString;
 			}
 
 			return string.Empty;
