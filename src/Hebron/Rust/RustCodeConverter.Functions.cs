@@ -203,7 +203,7 @@ namespace Hebron.Rust
 
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clangsharp.Cursor_getBinaryOpcode(info.Handle);
+				var type = clang.getCursorBinaryOperatorKind(info.Handle);
 				if (!type.IsBinaryOperator())
 				{
 					return;
@@ -215,7 +215,7 @@ namespace Hebron.Rust
 				var child2 = ProcessChildByIndex(info, 0);
 				if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 				{
-					var type = clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle);
+					var type = clang.getCursorBinaryOperatorKind(child2.Info.Handle);
 					if (!type.IsBinaryOperator())
 					{
 						return;
@@ -226,10 +226,10 @@ namespace Hebron.Rust
 			if (info.CursorKind == CXCursorKind.CXCursor_UnaryOperator)
 			{
 				var child = ProcessChildByIndex(info, 0);
-				var type = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+				var type = clang.getCursorUnaryOperatorKind(info.Handle);
 				if (child.IsPointer)
 				{
-					if (type == CX_UnaryOperatorKind.CX_UO_LNot)
+					if (type == CXUnaryOperatorKind.CXUnaryOperator_LNot)
 					{
 						crp.Expression = child.Expression + "== " + NullPtr;
 					}
@@ -241,7 +241,7 @@ namespace Hebron.Rust
 				{
 					var child2 = ProcessChildByIndex(child.Info, 0);
 					if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-						clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsBinaryOperator())
+						clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsBinaryOperator())
 					{
 					}
 					else
@@ -250,7 +250,7 @@ namespace Hebron.Rust
 					}
 				}
 
-				if (type == CX_UnaryOperatorKind.CX_UO_LNot)
+				if (type == CXUnaryOperatorKind.CXUnaryOperator_LNot)
 				{
 					var sub = ProcessChildByIndex(crp.Info, 0);
 					crp.Expression = sub.Expression + "== 0";
@@ -288,7 +288,7 @@ namespace Hebron.Rust
 		private bool AppendBoolToInt(Cursor info, ref string expression)
 		{
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-				clangsharp.Cursor_getBinaryOpcode(info.Handle).IsLogicalBooleanOperator())
+				clang.getCursorBinaryOperatorKind(info.Handle).IsLogicalBooleanOperator())
 			{
 				expression = "if " + expression + "{ 1 } else { 0 }";
 				return true;
@@ -298,7 +298,7 @@ namespace Hebron.Rust
 				var child2 = ProcessPossibleChildByIndex(info, 0);
 				if (child2 != null &&
 					child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-					clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsLogicalBooleanOperator())
+					clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsLogicalBooleanOperator())
 				{
 					expression = "if " + expression + "{ 1 } else { 0 }";
 					return true;
@@ -328,11 +328,11 @@ namespace Hebron.Rust
 
 				case CXCursorKind.CXCursor_UnaryExpr:
 					{
-						var opCode = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+						var opCode = clang.getCursorUnaryOperatorKind(info.Handle);
 						var expr = ProcessPossibleChildByIndex(info, 0);
 
 						string[] tokens = null;
-						if (opCode == CX_UnaryOperatorKind.CX_UO_Invalid && expr != null)
+						if (opCode == CXUnaryOperatorKind.CXUnaryOperator_Invalid && expr != null)
 						{
 							tokens = info.Tokenize();
 							var op = "sizeof";
@@ -392,7 +392,7 @@ namespace Hebron.Rust
 					{
 						var a = ProcessChildByIndex(info, 0);
 						var b = ProcessChildByIndex(info, 1);
-						var type = clangsharp.Cursor_getBinaryOpcode(info.Handle);
+						var type = clang.getCursorBinaryOperatorKind(info.Handle);
 
 						if (type.IsLogicalBinaryOperator())
 						{
@@ -400,27 +400,27 @@ namespace Hebron.Rust
 							AppendNonZeroCheck(b);
 						}
 
-						if (type == CX_BinaryOperatorKind.CX_BO_Assign)
+						if (type == CXBinaryOperatorKind.CXBinaryOperator_Assign)
 						{
 							// Check for multiple assigns per line
 							if (b.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 							{
-								var type2 = clangsharp.Cursor_getBinaryOpcode(b.Info.Handle);
-								if (type2 == CX_BinaryOperatorKind.CX_BO_Assign)
+								var type2 = clang.getCursorBinaryOperatorKind(b.Info.Handle);
+								if (type2 == CXBinaryOperatorKind.CXBinaryOperator_Assign)
 								{
 									var lvalues = new List<string>();
 
 									lvalues.Add(a.Expression);
 
 									// // Find right value
-									while (type2 == CX_BinaryOperatorKind.CX_BO_Assign)
+									while (type2 == CXBinaryOperatorKind.CXBinaryOperator_Assign)
 									{
 										var a1 = ProcessChildByIndex(b.Info, 0);
 										lvalues.Add(a1.Expression);
 
 										b = ProcessChildByIndex(b.Info, 1);
 
-										type2 = clangsharp.Cursor_getBinaryOpcode(b.Info.Handle);
+										type2 = clang.getCursorBinaryOperatorKind(b.Info.Handle);
 									}
 
 									var sb = new StringBuilder();
@@ -439,7 +439,7 @@ namespace Hebron.Rust
 							}
 						}
 
-						if (type.IsAssign() && type != CX_BinaryOperatorKind.CX_BO_ShlAssign && type != CX_BinaryOperatorKind.CX_BO_ShrAssign)
+						if (type.IsAssign() && type != CXBinaryOperatorKind.CXBinaryOperator_ShlAssign && type != CXBinaryOperatorKind.CXBinaryOperator_ShrAssign)
 						{
 							var typeInfo = info.ToTypeInfo();
 
@@ -450,7 +450,7 @@ namespace Hebron.Rust
 								{
 									var bb = ProcessChildByIndex(b.Info, 0);
 									if (bb.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-										clangsharp.Cursor_getBinaryOpcode(bb.Info.Handle).IsLogicalBooleanOperator())
+										clang.getCursorBinaryOperatorKind(bb.Info.Handle).IsLogicalBooleanOperator())
 									{
 										b = bb;
 									}
@@ -474,26 +474,26 @@ namespace Hebron.Rust
 						{
 							switch (type)
 							{
-								case CX_BinaryOperatorKind.CX_BO_Add:
+								case CXBinaryOperatorKind.CXBinaryOperator_Add:
 									return "(" + a.Expression + ").offset((" + b.Expression + ") as isize)";
-								case CX_BinaryOperatorKind.CX_BO_Sub:
+								case CXBinaryOperatorKind.CXBinaryOperator_Sub:
 									return "(" + a.Expression + ").offset(-((" + b.Expression + ") as isize))";
 							}
 						}
 
-						if (a.IsPointer && (type == CX_BinaryOperatorKind.CX_BO_Assign || type.IsBooleanOperator()) &&
+						if (a.IsPointer && (type == CXBinaryOperatorKind.CXBinaryOperator_Assign || type.IsBooleanOperator()) &&
 							(b.Expression.Deparentize() == "0"))
 						{
 							b.Expression = NullPtr;
 						}
 
-						if (a.IsPointer && b.IsPointer && type == CX_BinaryOperatorKind.CX_BO_Sub)
+						if (a.IsPointer && b.IsPointer && type == CXBinaryOperatorKind.CXBinaryOperator_Sub)
 						{
 							a.Expression = a.Expression.ApplyCast("isize");
 							b.Expression = b.Expression.ApplyCast("isize");
 						}
 
-						if (a.IsPointer && type == CX_BinaryOperatorKind.CX_BO_AddAssign)
+						if (a.IsPointer && type == CXBinaryOperatorKind.CXBinaryOperator_AddAssign)
 						{
 							return a.Expression + " = " + a.Expression + ".offset((" + b.Expression + ") as isize)";
 						}
@@ -508,40 +508,40 @@ namespace Hebron.Rust
 					{
 						var a = ProcessChildByIndex(info, 0);
 
-						var type = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+						var type = clang.getCursorUnaryOperatorKind(info.Handle);
 						var str = info.GetOperatorString();
 
-						if (type == CX_UnaryOperatorKind.CX_UO_AddrOf)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_AddrOf)
 						{
 							str = "&mut ";
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_Deref)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_Deref)
 						{
 							str = "*";
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_PreInc)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_PreInc)
 						{
 							return BuildUnaryOp(a, "preInc");
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_PostInc)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_PostInc)
 						{
 							return BuildUnaryOp(a, "postInc");
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_PreDec)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_PreDec)
 						{
 							return BuildUnaryOp(a, "preDec");
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_PostDec)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_PostDec)
 						{
 							return BuildUnaryOp(a, "postDec");
 						}
 
-						if (type == CX_UnaryOperatorKind.CX_UO_Not)
+						if (type == CXUnaryOperatorKind.CXUnaryOperator_Not)
 						{
 							str = "!";
 						}
@@ -680,7 +680,7 @@ namespace Hebron.Rust
 							case 3:
 								var expr = ProcessChildByIndex(info, 0);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(expr.Info.Handle).IsBooleanOperator())
+									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -691,7 +691,7 @@ namespace Hebron.Rust
 
 								expr = ProcessChildByIndex(info, 1);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(expr.Info.Handle).IsBooleanOperator())
+									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -910,9 +910,9 @@ namespace Hebron.Rust
 							}
 							else if (condition.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 							{
-								var op = clangsharp.Cursor_getBinaryOpcode(condition.Info.Handle);
+								var op = clang.getCursorBinaryOperatorKind(condition.Info.Handle);
 
-								if (op == CX_BinaryOperatorKind.CX_BO_Or || op == CX_BinaryOperatorKind.CX_BO_And)
+								if (op == CXBinaryOperatorKind.CXBinaryOperator_Or || op == CXBinaryOperatorKind.CXBinaryOperator_And)
 								{
 								}
 								else
@@ -1224,8 +1224,8 @@ namespace Hebron.Rust
 			var executionExpr = info.GetExpression();
 			if (info != null && info.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clangsharp.Cursor_getBinaryOpcode(info.Info.Handle);
-				if (type == CX_BinaryOperatorKind.CX_BO_Comma)
+				var type = clang.getCursorBinaryOperatorKind(info.Info.Handle);
+				if (type == CXBinaryOperatorKind.CXBinaryOperator_Comma)
 				{
 					var a = ReplaceCommas(ProcessChildByIndex(info.Info, 0));
 					var b = ReplaceCommas(ProcessChildByIndex(info.Info, 1));

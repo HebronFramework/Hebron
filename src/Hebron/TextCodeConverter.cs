@@ -31,16 +31,16 @@ namespace Hebron
 				case CXCursorKind.CXCursor_UnaryExpr:
 				case CXCursorKind.CXCursor_UnaryOperator:
 					{
-						var opCode = clangsharp.Cursor_getUnaryOpcode(cursor.Handle);
+						var opCode = clang.getCursorUnaryOperatorKind(cursor.Handle);
 						addition = string.Format("Unary Operator: {0} ({1})",
-							opCode, clangsharp.Cursor_getUnaryOpcodeSpelling(opCode));
+							opCode, clang.getUnaryOperatorKindSpelling(opCode));
 					}
 					break;
 				case CXCursorKind.CXCursor_BinaryOperator:
 					{
-						var opCode = clangsharp.Cursor_getBinaryOpcode(cursor.Handle);
+						var opCode = clang.getCursorBinaryOperatorKind(cursor.Handle);
 						addition = string.Format("Binary Operator: {0} ({1})",
-							opCode, clangsharp.Cursor_getBinaryOpcodeSpelling(opCode));
+							opCode, clang.getBinaryOperatorKindSpelling(opCode));
 					}
 					break;
 				case CXCursorKind.CXCursor_IntegerLiteral:

@@ -271,7 +271,7 @@ namespace Hebron.Roslyn
 
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clangsharp.Cursor_getBinaryOpcode(info.Handle);
+				var type = clang.getCursorBinaryOperatorKind(info.Handle);
 				if (!type.IsBinaryOperator())
 				{
 					return;
@@ -283,7 +283,7 @@ namespace Hebron.Roslyn
 				var child2 = ProcessChildByIndex(info, 0);
 				if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 				{
-					var type = clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle);
+					var type = clang.getCursorBinaryOperatorKind(child2.Info.Handle);
 					if (!type.IsBinaryOperator())
 					{
 						return;
@@ -294,10 +294,10 @@ namespace Hebron.Roslyn
 			if (info.CursorKind == CXCursorKind.CXCursor_UnaryOperator)
 			{
 				var child = ProcessChildByIndex(info, 0);
-				var type = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+				var type = clang.getCursorUnaryOperatorKind(info.Handle);
 				if (child.IsPointer)
 				{
-					if (type == CX_UnaryOperatorKind.CX_UO_LNot)
+					if (type == CXUnaryOperatorKind.CXUnaryOperator_LNot)
 					{
 						crp.Expression = child.Expression + "== null";
 					}
@@ -309,7 +309,7 @@ namespace Hebron.Roslyn
 				{
 					var child2 = ProcessChildByIndex(child.Info, 0);
 					if (child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-						clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsBinaryOperator())
+						clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsBinaryOperator())
 					{
 					}
 					else
@@ -318,7 +318,7 @@ namespace Hebron.Roslyn
 					}
 				}
 
-				if (type == CX_UnaryOperatorKind.CX_UO_LNot)
+				if (type == CXUnaryOperatorKind.CXUnaryOperator_LNot)
 				{
 					var sub = ProcessChildByIndex(crp.Info, 0);
 					crp.Expression = sub.Expression + "== 0";
@@ -356,7 +356,7 @@ namespace Hebron.Roslyn
 		private bool AppendBoolToInt(Cursor info, ref string expression)
 		{
 			if (info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-				clangsharp.Cursor_getBinaryOpcode(info.Handle).IsLogicalBooleanOperator())
+				clang.getCursorBinaryOperatorKind(info.Handle).IsLogicalBooleanOperator())
 			{
 				expression = "(" + expression + "?1:0)";
 				return true;
@@ -366,7 +366,7 @@ namespace Hebron.Roslyn
 				var child2 = ProcessPossibleChildByIndex(info, 0);
 				if (child2 != null &&
 					child2.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-					clangsharp.Cursor_getBinaryOpcode(child2.Info.Handle).IsLogicalBooleanOperator())
+					clang.getCursorBinaryOperatorKind(child2.Info.Handle).IsLogicalBooleanOperator())
 				{
 					expression = "(" + expression + "?1:0)";
 					return true;
@@ -389,11 +389,11 @@ namespace Hebron.Roslyn
 
 				case CXCursorKind.CXCursor_UnaryExpr:
 					{
-						var opCode = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+						var opCode = clang.getCursorUnaryOperatorKind(info.Handle);
 						var expr = ProcessPossibleChildByIndex(info, 0);
 
 						string[] tokens = null;
-						if (opCode == CX_UnaryOperatorKind.CX_UO_Invalid && expr != null)
+						if (opCode == CXUnaryOperatorKind.CXUnaryOperator_Invalid && expr != null)
 						{
 							tokens = info.Tokenize();
 							var op = "sizeof";
@@ -447,7 +447,7 @@ namespace Hebron.Roslyn
 					{
 						var a = ProcessChildByIndex(info, 0);
 						var b = ProcessChildByIndex(info, 1);
-						var type = clangsharp.Cursor_getBinaryOpcode(info.Handle);
+						var type = clang.getCursorBinaryOperatorKind(info.Handle);
 
 						if (type.IsLogicalBinaryOperator())
 						{
@@ -461,7 +461,7 @@ namespace Hebron.Roslyn
 							b.Expression = b.Expression.Parentize();
 						}
 
-						if (type.IsAssign() && type != CX_BinaryOperatorKind.CX_BO_ShlAssign && type != CX_BinaryOperatorKind.CX_BO_ShrAssign)
+						if (type.IsAssign() && type != CXBinaryOperatorKind.CXBinaryOperator_ShlAssign && type != CXBinaryOperatorKind.CXBinaryOperator_ShrAssign)
 						{
 							var typeInfo = info.ToTypeInfo();
 
@@ -472,7 +472,7 @@ namespace Hebron.Roslyn
 								{
 									var bb = ProcessChildByIndex(b.Info, 0);
 									if (bb.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-										clangsharp.Cursor_getBinaryOpcode(bb.Info.Handle).IsLogicalBooleanOperator())
+										clang.getCursorBinaryOperatorKind(bb.Info.Handle).IsLogicalBooleanOperator())
 									{
 										b = bb;
 									}
@@ -498,13 +498,13 @@ namespace Hebron.Roslyn
 							{
 								switch (type)
 								{
-									case CX_BinaryOperatorKind.CX_BO_Add:
+									case CXBinaryOperatorKind.CXBinaryOperator_Add:
 										return a.Expression + "[" + b.Expression + "]";
 								}
 							}
 						}
 
-						if (a.IsPointer && (type == CX_BinaryOperatorKind.CX_BO_Assign || type.IsBooleanOperator()) &&
+						if (a.IsPointer && (type == CXBinaryOperatorKind.CXBinaryOperator_Assign || type.IsBooleanOperator()) &&
 							(b.Expression.Deparentize() == "0"))
 						{
 							b.Expression = "null";
@@ -519,13 +519,13 @@ namespace Hebron.Roslyn
 					{
 						var a = ProcessChildByIndex(info, 0);
 
-						var type = clangsharp.Cursor_getUnaryOpcode(info.Handle);
+						var type = clang.getCursorUnaryOperatorKind(info.Handle);
 						var str = info.GetOperatorString();
 
 						var typeInfo = info.ToTypeInfo();
 
 						if (IsClass(typeInfo) && 
-							(type == CX_UnaryOperatorKind.CX_UO_AddrOf || type == CX_UnaryOperatorKind.CX_UO_Deref))
+							(type == CXUnaryOperatorKind.CXUnaryOperator_AddrOf || type == CXUnaryOperatorKind.CXUnaryOperator_Deref))
 						{
 							str = string.Empty;
 						}
@@ -646,7 +646,7 @@ namespace Hebron.Roslyn
 							case 3:
 								var expr = ProcessChildByIndex(info, 0);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(expr.Info.Handle).IsBooleanOperator())
+									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -657,7 +657,7 @@ namespace Hebron.Roslyn
 
 								expr = ProcessChildByIndex(info, 1);
 								if (expr.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator &&
-									clangsharp.Cursor_getBinaryOpcode(expr.Info.Handle).IsBooleanOperator())
+									clang.getCursorBinaryOperatorKind(expr.Info.Handle).IsBooleanOperator())
 								{
 									condition = expr;
 								}
@@ -765,9 +765,9 @@ namespace Hebron.Roslyn
 							}
 							else if (condition.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 							{
-								var op = clangsharp.Cursor_getBinaryOpcode(condition.Info.Handle);
+								var op = clang.getCursorBinaryOperatorKind(condition.Info.Handle);
 
-								if (op == CX_BinaryOperatorKind.CX_BO_Or || op == CX_BinaryOperatorKind.CX_BO_And)
+								if (op == CXBinaryOperatorKind.CXBinaryOperator_Or || op == CXBinaryOperatorKind.CXBinaryOperator_And)
 								{
 								}
 								else
@@ -1026,8 +1026,8 @@ namespace Hebron.Roslyn
 			var executionExpr = info.GetExpression();
 			if (info != null && info.Info.CursorKind == CXCursorKind.CXCursor_BinaryOperator)
 			{
-				var type = clangsharp.Cursor_getBinaryOpcode(info.Info.Handle);
-				if (type == CX_BinaryOperatorKind.CX_BO_Comma)
+				var type = clang.getCursorBinaryOperatorKind(info.Info.Handle);
+				if (type == CXBinaryOperatorKind.CXBinaryOperator_Comma)
 				{
 					var a = ReplaceCommas(ProcessChildByIndex(info.Info, 0));
 					var b = ReplaceCommas(ProcessChildByIndex(info.Info, 1));
