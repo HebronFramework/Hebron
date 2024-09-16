@@ -37,11 +37,16 @@ namespace Hebron.Roslyn
 						if (child.CursorChildren.Count > 0)
 						{
 							var str = child.CursorChildren[0].GetLiteralString();
-							if (str.StartsWith("0x"))
+							if (!string.IsNullOrEmpty(str))
 							{
-								value = int.Parse(str.Substring(2), NumberStyles.HexNumber);
-							} else {
-								value = int.Parse(str);
+								if (str.StartsWith("0x"))
+								{
+									value = int.Parse(str.Substring(2), NumberStyles.HexNumber);
+								}
+								else
+								{
+									value = int.Parse(str);
+								}
 							}
 						}
 
@@ -72,7 +77,19 @@ namespace Hebron.Roslyn
 						EnumMemberDeclarationSyntax enumMemberDeclaration = EnumMemberDeclaration(child.Spelling);
 						if (child.CursorChildren.Count > 0)
 						{
-							var value = int.Parse(child.CursorChildren[0].GetLiteralString());
+							int value = 0;
+							var str = child.CursorChildren[0].GetLiteralString();
+							if (!string.IsNullOrEmpty(str))
+							{
+								if (str.StartsWith("0x"))
+								{
+									value = int.Parse(str.Substring(2), NumberStyles.HexNumber);
+								}
+								else
+								{
+									value = int.Parse(str);
+								}
+							}
 							enumMemberDeclaration = enumMemberDeclaration.WithEqualsValue(EqualsValueClause(IdentifierName(value.ToString())));
 						}
 

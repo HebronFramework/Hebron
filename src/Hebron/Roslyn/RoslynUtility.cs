@@ -29,7 +29,7 @@ namespace Hebron.Roslyn
 
 		private static readonly HashSet<string> _specialWords = new HashSet<string>(new[]
 		{
-			"out", "in", "base", "null", "string", "lock"
+			"out", "in", "base", "null", "string", "lock", "object", "class", "event"
 		});
 
 		public static string FixSpecialWords(this string name)

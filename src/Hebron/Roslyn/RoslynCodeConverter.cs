@@ -29,7 +29,7 @@ namespace Hebron.Roslyn
 			TranslationUnit = Utility.Compile(parameters.InputPath, parameters.Defines, parameters.AdditionalIncludeDirectories);
 			Result = new RoslynConversionResult();
 
-			foreach(var cls in parameters.Classes)
+			foreach (var cls in parameters.Classes)
 			{
 				Classes.Add(cls);
 			}
@@ -86,6 +86,12 @@ namespace Hebron.Roslyn
 					case PrimitiveType.Void:
 						return "void";
 				}
+			}
+
+			var asEnumType = type.TypeDescriptor as EnumTypeInfo;
+			if (asEnumType != null)
+			{
+				return asEnumType.EnumName;
 			}
 
 			var asStructType = type.TypeDescriptor as StructTypeInfo;
@@ -149,6 +155,8 @@ namespace Hebron.Roslyn
 			{
 				sb.Append("*");
 			}
+
+			sb.Replace("enum ", "");
 
 			return sb.ToString();
 		}

@@ -64,6 +64,18 @@ namespace Hebron
 		public override string BuildTypeString() => PrimitiveType.ToString();
 	}
 
+	public class EnumTypeInfo : BaseTypeDescriptor
+	{
+		public string EnumName { get; private set; }
+
+		public EnumTypeInfo(string structName)
+		{
+			EnumName = structName;
+		}
+
+		public override string BuildTypeString() => EnumName;
+	}
+
 	public class StructTypeInfo : BaseTypeDescriptor
 	{
 		public string StructName { get; private set; }
@@ -371,7 +383,12 @@ namespace Hebron
 						++pointerCount;
 						continue;
 					case CXTypeKind.CXType_FunctionProto:
+					case CXTypeKind.CXType_FunctionNoProto:
 						typeEnum = 2;
+						run = false;
+						break;
+					case CXTypeKind.CXType_Enum:
+						typeEnum = 3;
 						run = false;
 						break;
 					default:
@@ -398,6 +415,7 @@ namespace Hebron
 						}
 
 						name = name.Replace("struct ", string.Empty);
+						name = name.Replace("enum ", string.Empty);
 						result = new TypeInfo(new StructTypeInfo(name), pointerCount, constantArraySizes.ToArray());
 					}
 					break;
@@ -410,6 +428,19 @@ namespace Hebron
 					}
 
 					result = new TypeInfo(new FunctionPointerTypeInfo(type.ResultType.ToTypeInfo(), args.ToArray()), pointerCount, constantArraySizes.ToArray());
+					break;
+				case 3:
+					{
+						var name = clang.getTypeSpelling(type).ToString();
+						var isConstQualifiedType = clang.isConstQualifiedType(type) != 0;
+						if (isConstQualifiedType)
+						{
+							name = name.Replace("const ", string.Empty);
+						}
+
+						name = name.Replace("enum ", string.Empty);
+						result = new TypeInfo(new EnumTypeInfo(name), pointerCount, constantArraySizes.ToArray());
+					}
 					break;
 			}
 
