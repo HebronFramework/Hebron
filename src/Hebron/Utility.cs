@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Index = ClangSharp.Index;
 using Type = ClangSharp.Type;
 
 namespace Hebron
@@ -296,12 +297,12 @@ namespace Hebron
 			if (cursor.kind == CXCursorKind.CXCursor_BinaryOperator ||
 				cursor.kind == CXCursorKind.CXCursor_CompoundAssignOperator)
 			{
-				return clangsharp.Cursor_getBinaryOpcodeSpelling(clangsharp.Cursor_getBinaryOpcode(cursor)).CString;
+				return cursor.BinaryOperatorKindSpelling.CString;
 			}
 
 			if (cursor.kind == CXCursorKind.CXCursor_UnaryOperator)
 			{
-				return clangsharp.Cursor_getUnaryOpcodeSpelling(clangsharp.Cursor_getUnaryOpcode(cursor)).CString;
+				return cursor.UnaryOperatorKindSpelling.CString;
 			}
 
 			return string.Empty;
@@ -451,55 +452,55 @@ namespace Hebron
 		public static TypeInfo ToTypeInfo(this CXCursor cursor) => cursor.Type.ToTypeInfo();
 		public static TypeInfo ToTypeInfo(this Cursor cursor) => cursor.Handle.ToTypeInfo();
 
-		public static bool IsLogicalBooleanOperator(this CX_BinaryOperatorKind op)
+		public static bool IsLogicalBooleanOperator(this CXBinaryOperatorKind op)
 		{
-			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||
-				op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_GE ||
-				op == CX_BinaryOperatorKind.CX_BO_GE || op == CX_BinaryOperatorKind.CX_BO_LE ||
-				op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT;
+			return op == CXBinaryOperatorKind.CXBinaryOperator_LAnd || op == CXBinaryOperatorKind.CXBinaryOperator_LOr ||
+				op == CXBinaryOperatorKind.CXBinaryOperator_EQ || op == CXBinaryOperatorKind.CXBinaryOperator_GE ||
+				op == CXBinaryOperatorKind.CXBinaryOperator_GE || op == CXBinaryOperatorKind.CXBinaryOperator_LE ||
+				op == CXBinaryOperatorKind.CXBinaryOperator_GT || op == CXBinaryOperatorKind.CXBinaryOperator_LT;
 		}
 
-		public static bool IsLogicalBinaryOperator(this CX_BinaryOperatorKind op)
+		public static bool IsLogicalBinaryOperator(this CXBinaryOperatorKind op)
 		{
-			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr;
+			return op == CXBinaryOperatorKind.CXBinaryOperator_LAnd || op == CXBinaryOperatorKind.CXBinaryOperator_LOr;
 		}
 
-		public static bool IsBinaryOperator(this CX_BinaryOperatorKind op)
+		public static bool IsBinaryOperator(this CXBinaryOperatorKind op)
 		{
-			return op == CX_BinaryOperatorKind.CX_BO_And || op == CX_BinaryOperatorKind.CX_BO_Or;
+			return op == CXBinaryOperatorKind.CXBinaryOperator_And || op == CXBinaryOperatorKind.CXBinaryOperator_Or;
 		}
 
-		public static bool IsAssign(this CX_BinaryOperatorKind op)
+		public static bool IsAssign(this CXBinaryOperatorKind op)
 		{
-			return op == CX_BinaryOperatorKind.CX_BO_AddAssign || op == CX_BinaryOperatorKind.CX_BO_AndAssign ||
-				   op == CX_BinaryOperatorKind.CX_BO_Assign || op == CX_BinaryOperatorKind.CX_BO_DivAssign ||
-				   op == CX_BinaryOperatorKind.CX_BO_MulAssign || op == CX_BinaryOperatorKind.CX_BO_OrAssign ||
-				   op == CX_BinaryOperatorKind.CX_BO_RemAssign || op == CX_BinaryOperatorKind.CX_BO_ShlAssign ||
-				   op == CX_BinaryOperatorKind.CX_BO_ShrAssign || op == CX_BinaryOperatorKind.CX_BO_SubAssign ||
-				   op == CX_BinaryOperatorKind.CX_BO_XorAssign;
+			return op == CXBinaryOperatorKind.CXBinaryOperator_AddAssign || op == CXBinaryOperatorKind.CXBinaryOperator_AndAssign ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_Assign || op == CXBinaryOperatorKind.CXBinaryOperator_DivAssign ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_MulAssign || op == CXBinaryOperatorKind.CXBinaryOperator_OrAssign ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_RemAssign || op == CXBinaryOperatorKind.CXBinaryOperator_ShlAssign ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_ShrAssign || op == CXBinaryOperatorKind.CXBinaryOperator_SubAssign ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_XorAssign;
 		}
 
-		public static bool IsBooleanOperator(this CX_BinaryOperatorKind op)
+		public static bool IsBooleanOperator(this CXBinaryOperatorKind op)
 		{
-			return op == CX_BinaryOperatorKind.CX_BO_LAnd || op == CX_BinaryOperatorKind.CX_BO_LOr ||
-				   op == CX_BinaryOperatorKind.CX_BO_EQ || op == CX_BinaryOperatorKind.CX_BO_NE ||
-				   op == CX_BinaryOperatorKind.CX_BO_GE || op == CX_BinaryOperatorKind.CX_BO_LE ||
-				   op == CX_BinaryOperatorKind.CX_BO_GT || op == CX_BinaryOperatorKind.CX_BO_LT ||
-				   op == CX_BinaryOperatorKind.CX_BO_And || op == CX_BinaryOperatorKind.CX_BO_Or;
+			return op == CXBinaryOperatorKind.CXBinaryOperator_LAnd || op == CXBinaryOperatorKind.CXBinaryOperator_LOr ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_EQ || op == CXBinaryOperatorKind.CXBinaryOperator_NE ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_GE || op == CXBinaryOperatorKind.CXBinaryOperator_LE ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_GT || op == CXBinaryOperatorKind.CXBinaryOperator_LT ||
+				   op == CXBinaryOperatorKind.CXBinaryOperator_And || op == CXBinaryOperatorKind.CXBinaryOperator_Or;
 		}
 
-		public static bool IsUnaryOperatorPre(this CX_UnaryOperatorKind type)
+		public static bool IsUnaryOperatorPre(this CXUnaryOperatorKind type)
 		{
 			switch (type)
 			{
-				case CX_UnaryOperatorKind.CX_UO_PreInc:
-				case CX_UnaryOperatorKind.CX_UO_PreDec:
-				case CX_UnaryOperatorKind.CX_UO_Plus:
-				case CX_UnaryOperatorKind.CX_UO_Minus:
-				case CX_UnaryOperatorKind.CX_UO_Not:
-				case CX_UnaryOperatorKind.CX_UO_LNot:
-				case CX_UnaryOperatorKind.CX_UO_AddrOf:
-				case CX_UnaryOperatorKind.CX_UO_Deref:
+				case CXUnaryOperatorKind.CXUnaryOperator_PreInc:
+				case CXUnaryOperatorKind.CXUnaryOperator_PreDec:
+				case CXUnaryOperatorKind.CXUnaryOperator_Plus:
+				case CXUnaryOperatorKind.CXUnaryOperator_Minus:
+				case CXUnaryOperatorKind.CXUnaryOperator_Not:
+				case CXUnaryOperatorKind.CXUnaryOperator_LNot:
+				case CXUnaryOperatorKind.CXUnaryOperator_AddrOf:
+				case CXUnaryOperatorKind.CXUnaryOperator_Deref:
 					return true;
 			}
 
