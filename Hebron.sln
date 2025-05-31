@@ -1,11 +1,21 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31911.196
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36127.28
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hebron", "src\Hebron\Hebron.csproj", "{1EA9E421-1FF5-441D-A7AA-46DA43C29216}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HebronTest", "tests\HebronTest\HebronTest.csproj", "{C99B182E-F286-4948-9842-1788CD11375F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hebron.Runtime", "src\Hebron.Runtime\Hebron.Runtime.csproj", "{20DB37EB-DBE1-0B9A-9508-4E3427B9C34A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hebron.ConsoleApp", "src\Hebron.ConsoleApp\Hebron.ConsoleApp.csproj", "{ED9C07EB-BF20-4E5A-8BD4-974DD06BC018}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		src\.editorconfig = src\.editorconfig
+		.gitignore = .gitignore
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +27,14 @@ Global
 		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1EA9E421-1FF5-441D-A7AA-46DA43C29216}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C99B182E-F286-4948-9842-1788CD11375F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C99B182E-F286-4948-9842-1788CD11375F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C99B182E-F286-4948-9842-1788CD11375F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C99B182E-F286-4948-9842-1788CD11375F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20DB37EB-DBE1-0B9A-9508-4E3427B9C34A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20DB37EB-DBE1-0B9A-9508-4E3427B9C34A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20DB37EB-DBE1-0B9A-9508-4E3427B9C34A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20DB37EB-DBE1-0B9A-9508-4E3427B9C34A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED9C07EB-BF20-4E5A-8BD4-974DD06BC018}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED9C07EB-BF20-4E5A-8BD4-974DD06BC018}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED9C07EB-BF20-4E5A-8BD4-974DD06BC018}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED9C07EB-BF20-4E5A-8BD4-974DD06BC018}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
